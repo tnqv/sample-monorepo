@@ -1,0 +1,137 @@
+services:
+  # ===================
+  # Application Services
+  # ===================
+  sampleapi:
+    build:
+      context: .
+      dockerfile: cmd/sampleapi/Dockerfile
+    container_name: sampleapi
+    ports:
+      - "8080:8080"
+      - "9090:9090"  # Metrics port
+    environment:
+      - PORT=8080
+      - METRICS_PORT=9090
+      - LOG_LEVEL=debug
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  sampleworker:
+    build:
+      context: .
+      dockerfile: cmd/sampleworker/Dockerfile
+    container_name: sampleworker
+    ports:
+      - "9091:9091"  # Metrics port
+    environment:
+      - WORKER_INTERVAL=5s
+      - METRICS_PORT=9091
+      - SECRET_KEY=local-dev-secret
+      - LOG_LEVEL=debug
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
+      - OTEL_SERVICE_NAME=sampleworker
+    networks:
+      - app-network
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  # ===================
+  # Monitoring Stack
+  # ===================
+  prometheus:
+    image: prom/prometheus:v3.8.0
+    container_name: prometheus
+    ports:
+      - "9092:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+      - "--web.enable-remote-write-receiver"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ===================
+  # Log Aggregation
+  # ===================
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - app-network
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  # ===================
+  # Distributed Tracing
+  # ===================
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
