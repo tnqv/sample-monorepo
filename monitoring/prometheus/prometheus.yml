@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers: []
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Sample API service
+  - job_name: "sampleapi"
+    static_configs:
+      - targets: ["sampleapi:9090"]
+    metrics_path: /metrics
+    scrape_interval: 5s
+
+  # Sample Worker service
+  - job_name: "sampleworker"
+    static_configs:
+      - targets: ["sampleworker:9091"]
+    metrics_path: /metrics
+    scrape_interval: 5s
+
