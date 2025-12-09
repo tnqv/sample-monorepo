@@ -169,6 +169,8 @@ jobs:
     needs: [build, deploy-staging]
     if: always() && needs.build.result == 'success' && (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped')
     runs-on: ubuntu-latest
+    # This environment requires manual approval in GitHub Settings → Environments
+    environment: prod
     permissions:
       id-token: write
       contents: read
