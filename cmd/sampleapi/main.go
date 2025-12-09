@@ -30,8 +30,6 @@ var (
 		},
 		[]string{"method", "path"},
 	)
-
-	test_release = "test_release"
 )
 
 func metricsMiddleware(next http.HandlerFunc, path string) http.HandlerFunc {
