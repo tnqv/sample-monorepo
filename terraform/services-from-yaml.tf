@@ -36,10 +36,10 @@ locals {
 
   # Compute container image URLs for each service
   # ECR repository name matches service name: {project}/{env}/{service_name}
-  # Developer only needs to update the tag in service.yaml to release new versions
+  # Image tag is managed by CI/CD pipeline (var.image_tag)
   service_images = {
     for name, config in local.services :
-    name => "${aws_ecr_repository.services[name].repository_url}:${lookup(lookup(config, "image", {}), "tag", "latest")}"
+    name => "${aws_ecr_repository.services[name].repository_url}:${var.image_tag}"
   }
 }
 

@@ -6,14 +6,6 @@ name: sampleworker
 description: "Background worker for processing tasks from SQS"
 
 # ===========================================
-# Container Image
-# ===========================================
-image:
-  # Image tag - update this to release new versions
-  # Examples: latest, v1.0.0, v1.2.3, sha-abc1234
-  tag: "latest"
-
-# ===========================================
 # Container Configuration
 # ===========================================
 container:
