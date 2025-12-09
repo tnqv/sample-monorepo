@@ -1,0 +1,131 @@
+# ===========================================
+# CI Pipeline - Build & Test
+# ===========================================
+# Runs on all PRs and pushes to main
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GO_VERSION: '1.23'
+
+jobs:
+  # ===========================================
+  # Go Tests
+  # ===========================================
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.out
+          fail_ci_if_error: false
+
+  # ===========================================
+  # Build Docker Images
+  # ===========================================
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [sampleapi, sampleworker]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: cmd/${{ matrix.service }}/Dockerfile
+          push: false
+          tags: ${{ matrix.service }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ===========================================
+  # Terraform Validation
+  # ===========================================
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.13.1'
+
+      - name: Terraform Format Check
+        working-directory: terraform
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Test
+        working-directory: terraform
+        run: terraform test
+
+  # ===========================================
+  # Lint
+  # ===========================================
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+
+      - name: Validate service.yaml files
+        run: |
+          for service in cmd/*/service.yaml; do
+            echo "Validating $service..."
+            yq e '.' "$service" > /dev/null || exit 1
+            
+            # Check required fields
+            name=$(yq '.name' "$service")
+            if [ "$name" == "null" ]; then
+              echo "Error: $service missing 'name' field"
+              exit 1
+            fi
+            
+            echo "✓ $service is valid"
+          done
+

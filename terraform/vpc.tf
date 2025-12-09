@@ -21,6 +21,8 @@ resource "aws_internet_gateway" "main" {
 }
 
 # Public Subnets
+# 10.0.0.0/24 - us-east-1a
+# 10.0.1.0/24 - us-east-1b
 resource "aws_subnet" "public" {
   count                   = 2
   vpc_id                  = aws_vpc.main.id
@@ -35,6 +37,8 @@ resource "aws_subnet" "public" {
 }
 
 # Private Subnets
+# 10.0.10.0/24 - us-east-1a
+# 10.0.11.0/24 - us-east-1b
 resource "aws_subnet" "private" {
   count             = 2
   vpc_id            = aws_vpc.main.id

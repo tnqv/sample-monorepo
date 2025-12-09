@@ -1,0 +1,1 @@
+{"Modules":[{"Key":"","Source":"","Dir":"."},{"Key":"sampleapi","Source":"./modules/ecs-fargate-service","Dir":"modules/ecs-fargate-service"},{"Key":"sampleworker","Source":"./modules/ecs-fargate-service","Dir":"modules/ecs-fargate-service"},{"Key":"tasks_queue","Source":"./modules/sqs-queue","Dir":"modules/sqs-queue"}]}
