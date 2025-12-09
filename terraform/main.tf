@@ -20,13 +20,15 @@ provider "aws" {
   dynamic "endpoints" {
     for_each = var.use_localstack ? [1] : []
     content {
-      ec2     = var.localstack_endpoint
-      ecs     = var.localstack_endpoint
-      ecr     = var.localstack_endpoint
-      elbv2   = var.localstack_endpoint
-      iam     = var.localstack_endpoint
-      logs    = var.localstack_endpoint
-      sqs     = var.localstack_endpoint
+      ec2                       = var.localstack_endpoint
+      ecs                       = var.localstack_endpoint
+      ecr                       = var.localstack_endpoint
+      elbv2                     = var.localstack_endpoint
+      iam                       = var.localstack_endpoint
+      logs                      = var.localstack_endpoint
+      sqs                       = var.localstack_endpoint
+      secretsmanager            = var.localstack_endpoint
+      applicationautoscaling    = var.localstack_endpoint
     }
   }
 }

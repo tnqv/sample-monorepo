@@ -58,3 +58,84 @@ output "log_group_name" {
   value       = aws_cloudwatch_log_group.ecs.name
 }
 
+# ===========================================
+# ECR Repositories
+# ===========================================
+
+output "sampleapi_ecr_url" {
+  description = "ECR repository URL for sampleapi"
+  value       = module.sampleapi.ecr_repository_url
+}
+
+output "sampleworker_ecr_url" {
+  description = "ECR repository URL for sampleworker"
+  value       = module.sampleworker.ecr_repository_url
+}
+
+# ===========================================
+# ECS Services
+# ===========================================
+
+output "sampleapi_service_name" {
+  description = "ECS service name for sampleapi"
+  value       = module.sampleapi.service_name
+}
+
+output "sampleworker_service_name" {
+  description = "ECS service name for sampleworker"
+  value       = module.sampleworker.service_name
+}
+
+output "sampleapi_task_definition_arn" {
+  description = "Task definition ARN for sampleapi"
+  value       = module.sampleapi.task_definition_arn
+}
+
+output "sampleworker_task_definition_arn" {
+  description = "Task definition ARN for sampleworker"
+  value       = module.sampleworker.task_definition_arn
+}
+
+# ===========================================
+# Service URLs
+# ===========================================
+
+output "sampleapi_url" {
+  description = "URL to access sampleapi"
+  value       = "http://${aws_lb.main.dns_name}/api"
+}
+
+output "sampleapi_health_url" {
+  description = "Health check URL for sampleapi"
+  value       = "http://${aws_lb.main.dns_name}/health"
+}
+
+# ===========================================
+# SQS Queue
+# ===========================================
+
+output "sqs_queue_url" {
+  description = "SQS queue URL for task messages"
+  value       = module.tasks_queue.queue_url
+}
+
+output "sqs_queue_arn" {
+  description = "SQS queue ARN"
+  value       = module.tasks_queue.queue_arn
+}
+
+output "sqs_queue_name" {
+  description = "SQS queue name"
+  value       = module.tasks_queue.queue_name
+}
+
+output "sqs_dlq_url" {
+  description = "SQS dead letter queue URL"
+  value       = module.tasks_queue.dlq_url
+}
+
+output "sqs_dlq_arn" {
+  description = "SQS dead letter queue ARN"
+  value       = module.tasks_queue.dlq_arn
+}
+

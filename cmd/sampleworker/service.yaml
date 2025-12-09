@@ -1,0 +1,87 @@
+# ===========================================
+# Service Definition for sampleworker
+# ===========================================
+
+name: sampleworker
+description: "Background worker for processing tasks from SQS"
+
+# ===========================================
+# Container Image
+# ===========================================
+image:
+  # Image tag - update this to release new versions
+  # Examples: latest, v1.0.0, v1.2.3, sha-abc1234
+  tag: "latest"
+
+# ===========================================
+# Container Configuration
+# ===========================================
+container:
+  # No port needed for background workers
+  # port: null
+  # CPU units (256 = 0.25 vCPU, 512 = 0.5 vCPU, 1024 = 1 vCPU)
+  cpu: 256
+  # Memory in MB
+  memory: 512
+  # No health check endpoint for workers (uses process health)
+
+# ===========================================
+# Scaling Configuration
+# ===========================================
+scaling:
+  # Desired number of tasks
+  desired_count: 1
+  # Minimum tasks (for autoscaling)
+  min_count: 1
+  # Maximum tasks (for autoscaling)
+  max_count: 3
+  # Enable autoscaling
+  autoscaling_enabled: true
+  # Target CPU utilization for scaling (%)
+  cpu_target: 70
+  # Scale based on SQS queue depth (optional)
+  # sqs_based_scaling:
+  #   enabled: true
+  #   target_messages_per_task: 100
+
+# ===========================================
+# Load Balancer Configuration
+# ===========================================
+load_balancer:
+  # Workers don't need a load balancer
+  enabled: false
+
+# ===========================================
+# Environment Variables
+# ===========================================
+environment:
+  WORKER_INTERVAL: "5s"
+  LOG_LEVEL: "info"
+
+# ===========================================
+# Monitoring Configuration
+# ===========================================
+monitoring:
+  # CloudWatch alarms
+  alarms:
+    # CPU alarm threshold (%)
+    cpu_threshold: 80
+    # Memory alarm threshold (%)
+    memory_threshold: 80
+    # DLQ messages threshold (trigger alert if DLQ has messages)
+    dlq_threshold: 1
+  # Custom metrics to track
+  metrics:
+    - name: worker_tasks_processed_total
+      type: counter
+    - name: worker_task_duration_seconds
+      type: histogram
+
+# ===========================================
+# Tags
+# ===========================================
+tags:
+  team: platform
+  component: worker
+  criticality: high
+
