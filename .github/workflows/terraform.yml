@@ -59,7 +59,7 @@ jobs:
         ports:
           - 4566:4566
         env:
-          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
           SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
           DEBUG: 0
         options: >-
@@ -189,7 +189,7 @@ jobs:
         ports:
           - 4566:4566
         env:
-          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
           SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
           DEBUG: 0
         options: >-
@@ -299,7 +299,7 @@ jobs:
         ports:
           - 4566:4566
         env:
-          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
           SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
           DEBUG: 0
         options: >-
@@ -416,7 +416,7 @@ jobs:
         ports:
           - 4566:4566
         env:
-          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
           SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
           DEBUG: 0
         options: >-
