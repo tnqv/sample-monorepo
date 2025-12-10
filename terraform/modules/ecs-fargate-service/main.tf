@@ -4,10 +4,10 @@
 
 locals {
   resource_name = "${var.project_name}-${var.environment}-${var.name}"
-  
+
   # Construct container image URL from ECR repository
   container_image = "${aws_ecr_repository.this.repository_url}:${var.image_tag}"
-  
+
   common_tags = merge(var.tags, {
     Name        = local.resource_name
     Environment = var.environment

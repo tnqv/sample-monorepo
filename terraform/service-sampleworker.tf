@@ -59,7 +59,7 @@ module "sampleworker" {
 
   # Container Configuration (initial/dummy - CI/CD manages actual values)
   image_tag      = "latest"
-  container_port = null  # Worker has no port
+  container_port = null # Worker has no port
   cpu            = local.sampleworker.cpu
   memory         = local.sampleworker.memory
   desired_count  = local.sampleworker.desired_count
