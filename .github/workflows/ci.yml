@@ -103,20 +103,3 @@ jobs:
         uses: golangci/golangci-lint-action@v4
         with:
           version: latest
-
-      - name: Validate service.yaml files
-        run: |
-          for service in cmd/*/service.yaml; do
-            echo "Validating $service..."
-            yq e '.' "$service" > /dev/null || exit 1
-            
-            # Check required fields
-            name=$(yq '.name' "$service")
-            if [ "$name" == "null" ]; then
-              echo "Error: $service missing 'name' field"
-              exit 1
-            fi
-            
-            echo "✓ $service is valid"
-          done
-

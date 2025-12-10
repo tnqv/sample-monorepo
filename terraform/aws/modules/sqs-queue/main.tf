@@ -23,7 +23,7 @@ resource "aws_sqs_queue" "dlq" {
   name = local.dlq_queue_name
 
   message_retention_seconds = var.dlq_message_retention_seconds
-  
+
   # FIFO settings
   fifo_queue                  = var.fifo_queue
   content_based_deduplication = var.fifo_queue ? var.content_based_deduplication : null
@@ -77,8 +77,8 @@ resource "aws_sqs_queue_policy" "this" {
       # Publisher permissions
       length(var.publisher_role_arns) > 0 ? [
         {
-          Sid       = "AllowPublish"
-          Effect    = "Allow"
+          Sid    = "AllowPublish"
+          Effect = "Allow"
           Principal = {
             AWS = var.publisher_role_arns
           }
@@ -93,8 +93,8 @@ resource "aws_sqs_queue_policy" "this" {
       # Consumer permissions
       length(var.consumer_role_arns) > 0 ? [
         {
-          Sid       = "AllowConsume"
-          Effect    = "Allow"
+          Sid    = "AllowConsume"
+          Effect = "Allow"
           Principal = {
             AWS = var.consumer_role_arns
           }

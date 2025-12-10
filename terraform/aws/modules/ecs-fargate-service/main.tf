@@ -4,7 +4,10 @@
 
 locals {
   resource_name = "${var.project_name}-${var.environment}-${var.name}"
-  
+
+  # Construct container image URL from ECR repository
+  container_image = "${aws_ecr_repository.this.repository_url}:${var.image_tag}"
+
   common_tags = merge(var.tags, {
     Name        = local.resource_name
     Environment = var.environment
@@ -15,7 +18,7 @@ locals {
   # Build container definition
   container_definition = {
     name      = var.name
-    image     = var.container_image
+    image     = local.container_image
     essential = true
 
     portMappings = var.container_port != null ? [
@@ -76,9 +79,15 @@ resource "aws_ecs_task_definition" "this" {
   execution_role_arn       = var.execution_role_arn
   task_role_arn            = var.task_role_arn
 
+  # Initial dummy container definition - CI/CD will manage actual deployments
   container_definitions = jsonencode([local.container_definition])
 
   tags = local.common_tags
+
+  # Ignore container_definitions changes - managed by CI/CD via Jsonnet
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }
 
 # ===========================================

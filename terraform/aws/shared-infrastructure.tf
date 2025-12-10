@@ -15,12 +15,12 @@ module "tasks_queue" {
   project_name = var.project_name
   environment  = var.environment
 
-  visibility_timeout_seconds = 300  # 5 minutes
-  message_retention_seconds  = 1209600  # 14 days
-  receive_wait_time_seconds  = 20  # Long polling
+  visibility_timeout_seconds = 300     # 5 minutes
+  message_retention_seconds  = 1209600 # 14 days
+  receive_wait_time_seconds  = 20      # Long polling
 
   enable_dlq        = true
-  max_receive_count = 3  # Max 3 attempts before moving to DLQ
+  max_receive_count = 3 # Max 3 attempts before moving to DLQ
 
   # Grant permissions to ECS task role (use name, not id, for for_each compatibility)
   publisher_role_names = [aws_iam_role.ecs_task_role.name]

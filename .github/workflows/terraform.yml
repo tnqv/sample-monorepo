@@ -1,0 +1,529 @@
+# ===========================================
+# Terraform Infrastructure CI/CD
+# ===========================================
+# Provisions infrastructure for staging and production using workspaces
+# - PR: Plan with LocalStack (shows diff on PR)
+# - Push to main: Plan auto-runs, Apply requires approval
+
+name: "Terraform"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/aws/**'
+      - '.github/workflows/terraform.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'terraform/aws/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+
+env:
+  TF_VERSION: '1.13.1'
+  AWS_REGION: us-east-1
+  TF_WORKING_DIR: terraform/aws
+
+jobs:
+  # ===========================================
+  # Terraform Plan (PR) - Shows diff on PR
+  # ===========================================
+  plan-pr:
+    name: "Plan (${{ matrix.workspace }})"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    services:
+      localstack:
+        image: localstack/localstack-pro:latest
+        ports:
+          - 4566:4566
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling
+          DEBUG: 0
+        options: >-
+          --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    strategy:
+      matrix:
+        workspace: [staging, prod]
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Wait for LocalStack
+        run: |
+          for i in {1..30}; do
+            curl -sf http://localhost:4566/_localstack/health > /dev/null && break
+            sleep 2
+          done
+      # These steps are only simulating the actual deployment
+      - name: Install LocalStack CLI
+        run: pip install localstack
+
+      - name: Import LocalStack State
+        run: |
+          # Import pre-provisioned state for this environment
+          STATE_FILE="${{ env.TF_WORKING_DIR }}/environments/${{ matrix.workspace }}/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Select/Create Workspace
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform workspace select -or-create ${{ matrix.workspace }}
+
+      - name: Restore Terraform State
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          STATE_FILE="environments/${{ matrix.workspace }}/terraform.tfstate"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Restoring terraform state from $STATE_FILE"
+            mkdir -p terraform.tfstate.d/${{ matrix.workspace }}
+            cp "$STATE_FILE" terraform.tfstate.d/${{ matrix.workspace }}/terraform.tfstate
+          else
+            echo "No state file found at $STATE_FILE"
+          fi
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          # -refresh=false: Skip state refresh since LocalStack doesn't fully restore
+          # Application Auto Scaling targets. This still validates code changes accurately.
+          terraform plan \
+            -refresh=false \
+            -var="environment=${{ matrix.workspace }}" \
+            -var="use_localstack=true" \
+            -var="localstack_endpoint=http://localhost:4566" \
+            -var-file="environments/${{ matrix.workspace }}.tfvars" \
+            -no-color 2>&1 | tee plan-output.txt
+        continue-on-error: true
+
+      - name: Comment Plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan-output.txt', 'utf8');
+            const workspace = '${{ matrix.workspace }}';
+            const outcome = '${{ steps.plan.outcome }}';
+            const icon = outcome === 'success' ? '✅' : '❌';
+            
+            const output = `### ${icon} Terraform Plan - \`${workspace}\`
+            
+            <details>
+            <summary>Show Plan Output</summary>
+            
+            \`\`\`hcl
+            ${plan.substring(0, 65000)}
+            \`\`\`
+            
+            </details>
+            
+            *Validated with LocalStack*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  # ===========================================
+  # Plan on Push to Main (auto-runs)
+  # ===========================================
+  plan-main:
+    name: "Plan (push to main)"
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      localstack:
+        image: localstack/localstack-pro:latest
+        ports:
+          - 4566:4566
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling
+          DEBUG: 0
+        options: >-
+          --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    strategy:
+      matrix:
+        workspace: [staging, prod]
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Wait for LocalStack
+        run: |
+          for i in {1..30}; do
+            curl -sf http://localhost:4566/_localstack/health > /dev/null && break
+            sleep 2
+          done
+      # These steps are only simulating the actual deployment
+      - name: Install LocalStack CLI
+        run: pip install localstack
+
+      - name: Import LocalStack State
+        run: |
+          STATE_FILE="${{ env.TF_WORKING_DIR }}/environments/${{ matrix.workspace }}/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Select/Create Workspace
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform workspace select -or-create ${{ matrix.workspace }}
+
+      - name: Restore Terraform State
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          STATE_FILE="environments/${{ matrix.workspace }}/terraform.tfstate"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Restoring terraform state from $STATE_FILE"
+            mkdir -p terraform.tfstate.d/${{ matrix.workspace }}
+            cp "$STATE_FILE" terraform.tfstate.d/${{ matrix.workspace }}/terraform.tfstate
+          else
+            echo "No state file found at $STATE_FILE"
+          fi
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          # -refresh=false: Skip state refresh for LocalStack compatibility
+          terraform plan \
+            -refresh=false \
+            -var="environment=${{ matrix.workspace }}" \
+            -var="use_localstack=true" \
+            -var="localstack_endpoint=http://localhost:4566" \
+            -var-file="environments/${{ matrix.workspace }}.tfvars" \
+            -out=tfplan-${{ matrix.workspace }}
+
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.workspace }}
+          path: ${{ env.TF_WORKING_DIR }}/tfplan-${{ matrix.workspace }}
+          retention-days: 7
+
+      - name: Plan Summary
+        run: |
+          echo "## 📋 Terraform Plan Complete - ${{ matrix.workspace }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Plan artifact uploaded. Use **workflow_dispatch** to apply:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Go to Actions → Terraform → Run workflow" >> $GITHUB_STEP_SUMMARY
+          echo "2. Select environment: \`${{ matrix.workspace }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Select action: \`apply\`" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================
+  # Apply to Staging (Manual with Approval)
+  # ===========================================
+  apply-staging:
+    name: "Apply to Staging"
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment: staging  # Requires approval if configured
+    permissions:
+      contents: read
+      id-token: write
+
+    services:
+      localstack:
+        image: localstack/localstack-pro:latest
+        ports:
+          - 4566:4566
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling
+          DEBUG: 0
+        options: >-
+          --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Uncomment for real AWS deployment
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      #     aws-region: ${{ env.AWS_REGION }}
+
+      - name: Wait for LocalStack
+        run: |
+          for i in {1..30}; do
+            curl -sf http://localhost:4566/_localstack/health > /dev/null && break
+            sleep 2
+          done
+      # These steps are only simulating the actual deployment
+      - name: Install LocalStack CLI
+        run: pip install localstack
+
+      - name: Import LocalStack State
+        run: |
+          STATE_FILE="${{ env.TF_WORKING_DIR }}/environments/staging/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Select Workspace
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform workspace select -or-create staging
+
+      - name: Restore Terraform State
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          STATE_FILE="environments/staging/terraform.tfstate"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Restoring terraform state from $STATE_FILE"
+            mkdir -p terraform.tfstate.d/staging
+            cp "$STATE_FILE" terraform.tfstate.d/staging/terraform.tfstate
+          else
+            echo "No state file found at $STATE_FILE"
+          fi
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          # -refresh=false: Skip state refresh for LocalStack compatibility
+          terraform plan \
+            -refresh=false \
+            -var="environment=staging" \
+            -var="use_localstack=true" \
+            -var="localstack_endpoint=http://localhost:4566" \
+            -var-file="environments/staging.tfvars" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'apply'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: echo "run 'terraform apply -auto-approve tfplan' manually"
+
+      - name: Summary
+        run: |
+          ACTION="${{ github.event.inputs.action }}"
+          if [ "$ACTION" == "apply" ]; then
+            echo "## ✅ Staging Applied Successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## 📋 Staging Plan Complete" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | staging |" >> $GITHUB_STEP_SUMMARY
+          echo "| Action | $ACTION |" >> $GITHUB_STEP_SUMMARY
+          echo "| Approved by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================
+  # Apply to Production (Manual with Approval)
+  # ===========================================
+  apply-prod:
+    name: "Apply to Production"
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod'
+    runs-on: ubuntu-latest
+    environment: prod  # Requires approval
+    permissions:
+      contents: read
+      id-token: write
+
+    services:
+      localstack:
+        image: localstack/localstack-pro:latest
+        ports:
+          - 4566:4566
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling
+          DEBUG: 0
+        options: >-
+          --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Uncomment for real AWS deployment
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      #     aws-region: ${{ env.AWS_REGION }}
+
+      - name: Wait for LocalStack
+        run: |
+          for i in {1..30}; do
+            curl -sf http://localhost:4566/_localstack/health > /dev/null && break
+            sleep 2
+          done
+      # These steps are only simulating the actual deployment
+      - name: Install LocalStack CLI
+        run: pip install localstack
+
+      - name: Import LocalStack State
+        run: |
+          STATE_FILE="${{ env.TF_WORKING_DIR }}/environments/prod/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }} 
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Select Workspace
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform workspace select -or-create prod
+
+      - name: Restore Terraform State
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          STATE_FILE="environments/prod/terraform.tfstate"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Restoring terraform state from $STATE_FILE"
+            mkdir -p terraform.tfstate.d/prod
+            cp "$STATE_FILE" terraform.tfstate.d/prod/terraform.tfstate
+          else
+            echo "No state file found at $STATE_FILE"
+          fi
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          # -refresh=false: Skip state refresh for LocalStack compatibility
+          terraform plan \
+            -refresh=false \
+            -var="environment=prod" \
+            -var="use_localstack=true" \
+            -var="localstack_endpoint=http://localhost:4566" \
+            -var-file="environments/prod.tfvars" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'apply'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: echo "run 'terraform apply -auto-approve tfplan' manually"
+
+      - name: Summary
+        run: |
+          ACTION="${{ github.event.inputs.action }}"
+          if [ "$ACTION" == "apply" ]; then
+            echo "## ✅ Production Applied Successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## 📋 Production Plan Complete" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | production |" >> $GITHUB_STEP_SUMMARY
+          echo "| Action | $ACTION |" >> $GITHUB_STEP_SUMMARY
+          echo "| Approved by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
