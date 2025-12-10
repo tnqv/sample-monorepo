@@ -59,47 +59,46 @@ output "log_group_name" {
 }
 
 # ===========================================
-# ECR Repositories (Dynamic)
+# Sample API Service Outputs
 # ===========================================
 
-output "ecr_repository_urls" {
-  description = "ECR repository URLs for all services"
-  value = {
-    for name, repo in aws_ecr_repository.services :
-    name => repo.repository_url
-  }
+output "sampleapi_ecr_url" {
+  description = "ECR repository URL for sampleapi"
+  value       = module.sampleapi.ecr_repository_url
+}
+
+output "sampleapi_service_name" {
+  description = "ECS service name for sampleapi"
+  value       = module.sampleapi.service_name
+}
+
+output "sampleapi_task_definition_arn" {
+  description = "Task definition ARN for sampleapi"
+  value       = module.sampleapi.task_definition_arn
+}
+
+output "sampleapi_url" {
+  description = "URL to access sampleapi via ALB"
+  value       = "http://${aws_lb.main.dns_name}/api"
 }
 
 # ===========================================
-# ECS Services (Dynamic)
+# Sample Worker Service Outputs
 # ===========================================
 
-output "service_names" {
-  description = "ECS service names for all services"
-  value = {
-    for name, service in aws_ecs_service.services :
-    name => service.name
-  }
+output "sampleworker_ecr_url" {
+  description = "ECR repository URL for sampleworker"
+  value       = module.sampleworker.ecr_repository_url
 }
 
-output "task_definition_arns" {
-  description = "Task definition ARNs for all services"
-  value = {
-    for name, task in aws_ecs_task_definition.services :
-    name => task.arn
-  }
+output "sampleworker_service_name" {
+  description = "ECS service name for sampleworker"
+  value       = module.sampleworker.service_name
 }
 
-# ===========================================
-# Service URLs (for API services)
-# ===========================================
-
-output "service_urls" {
-  description = "URLs to access API services via ALB"
-  value = {
-    for name, config in local.api_services :
-    name => "http://${aws_lb.main.dns_name}${config.load_balancer.path_patterns[0]}"
-  }
+output "sampleworker_task_definition_arn" {
+  description = "Task definition ARN for sampleworker"
+  value       = module.sampleworker.task_definition_arn
 }
 
 # ===========================================

@@ -61,9 +61,10 @@ variable "aws_region" {
 # Container Configuration
 # ===========================================
 
-variable "container_image" {
-  description = "Container image URL with tag"
+variable "image_tag" {
+  description = "Container image tag (ECR repository is created by the module)"
   type        = string
+  default     = "latest"
 }
 
 variable "container_port" {
