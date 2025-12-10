@@ -13,7 +13,7 @@ locals {
       cpu            = 256
       memory         = 512
       container_port = 8080
-      desired_count  = 1
+      desired_count  = 2
 
       # Auto Scaling
       enable_autoscaling = true
