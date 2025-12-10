@@ -28,7 +28,10 @@ env:
   AWS_REGION: us-east-1
   PROJECT_NAME: email-platform
   SERVICE_NAME: sampleapi
-  LOCALSTACK_ENDPOINT: http://localhost:4566
+  # LocalStack configuration
+  AWS_ENDPOINT_URL: http://localhost:4566
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
 
 concurrency:
   group: release-sampleapi
@@ -103,7 +106,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install localstack awscli-local
+          pip install localstack
           sudo apt-get update && sudo apt-get install -y jsonnet
 
       - name: Import LocalStack State
@@ -125,11 +128,11 @@ jobs:
           ECR_REPO="000000000000.dkr.ecr.${{ env.AWS_REGION }}.localhost.localstack.cloud:4566/${{ env.PROJECT_NAME }}-staging-${{ env.SERVICE_NAME }}"
           
           # Get IAM role ARNs
-          EXECUTION_ROLE_ARN=$(awslocal iam get-role --role-name ${{ env.PROJECT_NAME }}-staging-ecs-execution-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-staging-ecs-execution-role")
-          TASK_ROLE_ARN=$(awslocal iam get-role --role-name ${{ env.PROJECT_NAME }}-staging-ecs-task-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-staging-ecs-task-role")
+          EXECUTION_ROLE_ARN=$(aws iam get-role --role-name ${{ env.PROJECT_NAME }}-staging-ecs-execution-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-staging-ecs-execution-role")
+          TASK_ROLE_ARN=$(aws iam get-role --role-name ${{ env.PROJECT_NAME }}-staging-ecs-task-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-staging-ecs-task-role")
           
           # Get SQS Queue URL
-          SQS_QUEUE_URL=$(awslocal sqs get-queue-url --queue-name ${{ env.PROJECT_NAME }}-staging-tasks --query 'QueueUrl' --output text 2>/dev/null || echo "http://localhost:4566/000000000000/${{ env.PROJECT_NAME }}-staging-tasks")
+          SQS_QUEUE_URL=$(aws sqs get-queue-url --queue-name ${{ env.PROJECT_NAME }}-staging-tasks --query 'QueueUrl' --output text 2>/dev/null || echo "http://localhost:4566/000000000000/${{ env.PROJECT_NAME }}-staging-tasks")
           
           echo "ecr_repo=$ECR_REPO" >> $GITHUB_OUTPUT
           echo "execution_role_arn=$EXECUTION_ROLE_ARN" >> $GITHUB_OUTPUT
@@ -164,7 +167,7 @@ jobs:
         id: task-def
         run: |
           echo "Registering task definition in LocalStack..."
-          TASK_DEF_ARN=$(awslocal ecs register-task-definition \
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://task-definition.json \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
@@ -181,7 +184,7 @@ jobs:
           echo "  Service: $SERVICE"
           echo "  Task Definition: ${{ steps.task-def.outputs.task_def_arn }}"
           
-          awslocal ecs update-service \
+          aws ecs update-service \
             --cluster "$CLUSTER" \
             --service "$SERVICE" \
             --task-definition "${{ steps.task-def.outputs.task_def_arn }}" \
@@ -195,7 +198,7 @@ jobs:
           SERVICE="${{ env.PROJECT_NAME }}-staging-${{ env.SERVICE_NAME }}"
           
           echo "Verifying deployment..."
-          awslocal ecs describe-services \
+          aws ecs describe-services \
             --cluster "$CLUSTER" \
             --services "$SERVICE" \
             --query 'services[0].{status:status,runningCount:runningCount,desiredCount:desiredCount,taskDefinition:taskDefinition}'
@@ -244,7 +247,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install localstack awscli-local
+          pip install localstack
           sudo apt-get update && sudo apt-get install -y jsonnet
 
       - name: Import LocalStack State
@@ -266,11 +269,11 @@ jobs:
           ECR_REPO="000000000000.dkr.ecr.${{ env.AWS_REGION }}.localhost.localstack.cloud:4566/${{ env.PROJECT_NAME }}-prod-${{ env.SERVICE_NAME }}"
           
           # Get IAM role ARNs
-          EXECUTION_ROLE_ARN=$(awslocal iam get-role --role-name ${{ env.PROJECT_NAME }}-prod-ecs-execution-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-prod-ecs-execution-role")
-          TASK_ROLE_ARN=$(awslocal iam get-role --role-name ${{ env.PROJECT_NAME }}-prod-ecs-task-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-prod-ecs-task-role")
+          EXECUTION_ROLE_ARN=$(aws iam get-role --role-name ${{ env.PROJECT_NAME }}-prod-ecs-execution-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-prod-ecs-execution-role")
+          TASK_ROLE_ARN=$(aws iam get-role --role-name ${{ env.PROJECT_NAME }}-prod-ecs-task-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-prod-ecs-task-role")
           
           # Get SQS Queue URL
-          SQS_QUEUE_URL=$(awslocal sqs get-queue-url --queue-name ${{ env.PROJECT_NAME }}-prod-tasks --query 'QueueUrl' --output text 2>/dev/null || echo "http://localhost:4566/000000000000/${{ env.PROJECT_NAME }}-prod-tasks")
+          SQS_QUEUE_URL=$(aws sqs get-queue-url --queue-name ${{ env.PROJECT_NAME }}-prod-tasks --query 'QueueUrl' --output text 2>/dev/null || echo "http://localhost:4566/000000000000/${{ env.PROJECT_NAME }}-prod-tasks")
           
           echo "ecr_repo=$ECR_REPO" >> $GITHUB_OUTPUT
           echo "execution_role_arn=$EXECUTION_ROLE_ARN" >> $GITHUB_OUTPUT
@@ -305,7 +308,7 @@ jobs:
         id: task-def
         run: |
           echo "Registering task definition in LocalStack..."
-          TASK_DEF_ARN=$(awslocal ecs register-task-definition \
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://task-definition.json \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
@@ -322,7 +325,7 @@ jobs:
           echo "  Service: $SERVICE"
           echo "  Task Definition: ${{ steps.task-def.outputs.task_def_arn }}"
           
-          awslocal ecs update-service \
+          aws ecs update-service \
             --cluster "$CLUSTER" \
             --service "$SERVICE" \
             --task-definition "${{ steps.task-def.outputs.task_def_arn }}" \
@@ -336,7 +339,7 @@ jobs:
           SERVICE="${{ env.PROJECT_NAME }}-prod-${{ env.SERVICE_NAME }}"
           
           echo "Verifying deployment..."
-          awslocal ecs describe-services \
+          aws ecs describe-services \
             --cluster "$CLUSTER" \
             --services "$SERVICE" \
             --query 'services[0].{status:status,runningCount:runningCount,desiredCount:desiredCount,taskDefinition:taskDefinition}'
