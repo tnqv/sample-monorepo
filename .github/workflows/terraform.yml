@@ -132,7 +132,10 @@ jobs:
         id: plan
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
+          # -refresh=false: Skip state refresh since LocalStack doesn't fully restore
+          # Application Auto Scaling targets. This still validates code changes accurately.
           terraform plan \
+            -refresh=false \
             -var="environment=${{ matrix.workspace }}" \
             -var="use_localstack=true" \
             -var="localstack_endpoint=http://localhost:4566" \
@@ -260,7 +263,9 @@ jobs:
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
+          # -refresh=false: Skip state refresh for LocalStack compatibility
           terraform plan \
+            -refresh=false \
             -var="environment=${{ matrix.workspace }}" \
             -var="use_localstack=true" \
             -var="localstack_endpoint=http://localhost:4566" \
@@ -374,7 +379,9 @@ jobs:
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
+          # -refresh=false: Skip state refresh for LocalStack compatibility
           terraform plan \
+            -refresh=false \
             -var="environment=staging" \
             -var="use_localstack=true" \
             -var="localstack_endpoint=http://localhost:4566" \
@@ -492,7 +499,9 @@ jobs:
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
+          # -refresh=false: Skip state refresh for LocalStack compatibility
           terraform plan \
+            -refresh=false \
             -var="environment=prod" \
             -var="use_localstack=true" \
             -var="localstack_endpoint=http://localhost:4566" \
