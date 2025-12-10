@@ -2,7 +2,7 @@
 # Release Pipeline - sampleworker
 # ===========================================
 # Releases sampleworker service: staging → approval → prod
-# Uses Jsonnet to render task definitions from task-definitions/
+# Uses LocalStack for testing ECS deployments
 
 name: "Release: sampleworker"
 
@@ -28,6 +28,7 @@ env:
   AWS_REGION: us-east-1
   PROJECT_NAME: email-platform
   SERVICE_NAME: sampleworker
+  LOCALSTACK_ENDPOINT: http://localhost:4566
 
 concurrency:
   group: release-sampleworker
@@ -56,32 +57,10 @@ jobs:
           IMAGE_TAG="${{ env.SERVICE_NAME }}-${SHORT_SHA}-${TIMESTAMP}"
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # Dummy steps for testing - uncomment below for real deployment
-      - name: Build Image (dummy)
+      - name: Build Image (dummy for LocalStack testing)
         run: |
           echo "Building image: ${{ steps.meta.outputs.image_tag }}"
-          echo "Would build and push to ECR"
-
-      # Real implementation (uncomment when ready):
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      #     aws-region: ${{ env.AWS_REGION }}
-      #
-      # - name: Login to Amazon ECR
-      #   id: login-ecr
-      #   uses: aws-actions/amazon-ecr-login@v2
-      #
-      # - name: Build and push image
-      #   uses: docker/build-push-action@v5
-      #   with:
-      #     context: .
-      #     file: cmd/${{ env.SERVICE_NAME }}/Dockerfile
-      #     push: true
-      #     tags: |
-      #       ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}/staging/${{ env.SERVICE_NAME }}:${{ steps.meta.outputs.image_tag }}
-      #       ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}/prod/${{ env.SERVICE_NAME }}:${{ steps.meta.outputs.image_tag }}
+          echo "In real deployment, this would push to ECR"
 
       - name: Build summary
         run: |
@@ -104,82 +83,142 @@ jobs:
       id-token: write
       contents: read
 
+    services:
+      localstack:
+        image: localstack/localstack-pro:latest
+        ports:
+          - 4566:4566
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling
+          DEBUG: 0
+        options: >-
+          --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Jsonnet
+      - name: Install Dependencies
         run: |
+          pip install localstack awscli-local
           sudo apt-get update && sudo apt-get install -y jsonnet
 
-      - name: Render task definition with Jsonnet
+      - name: Import LocalStack State
+        run: |
+          STATE_FILE="terraform/aws/environments/staging/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing LocalStack state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+
+      - name: Get Infrastructure Values from LocalStack
+        id: infra
+        run: |
+          # Get ECR repository URL (using LocalStack format)
+          ECR_REPO="000000000000.dkr.ecr.${{ env.AWS_REGION }}.localhost.localstack.cloud:4566/${{ env.PROJECT_NAME }}-staging-${{ env.SERVICE_NAME }}"
+          
+          # Get IAM role ARNs
+          EXECUTION_ROLE_ARN=$(awslocal iam get-role --role-name ${{ env.PROJECT_NAME }}-staging-ecs-execution-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-staging-ecs-execution-role")
+          TASK_ROLE_ARN=$(awslocal iam get-role --role-name ${{ env.PROJECT_NAME }}-staging-ecs-task-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-staging-ecs-task-role")
+          
+          # Get SQS Queue URLs
+          SQS_QUEUE_URL=$(awslocal sqs get-queue-url --queue-name ${{ env.PROJECT_NAME }}-staging-tasks --query 'QueueUrl' --output text 2>/dev/null || echo "http://localhost:4566/000000000000/${{ env.PROJECT_NAME }}-staging-tasks")
+          SQS_DLQ_URL=$(awslocal sqs get-queue-url --queue-name ${{ env.PROJECT_NAME }}-staging-tasks-dlq --query 'QueueUrl' --output text 2>/dev/null || echo "http://localhost:4566/000000000000/${{ env.PROJECT_NAME }}-staging-tasks-dlq")
+          
+          # Get Secret ARN
+          SECRET_ARN=$(awslocal secretsmanager describe-secret --secret-id ${{ env.PROJECT_NAME }}/staging/worker-secret --query 'ARN' --output text 2>/dev/null || echo "arn:aws:secretsmanager:${{ env.AWS_REGION }}:000000000000:secret:${{ env.PROJECT_NAME }}/staging/worker-secret")
+          
+          echo "ecr_repo=$ECR_REPO" >> $GITHUB_OUTPUT
+          echo "execution_role_arn=$EXECUTION_ROLE_ARN" >> $GITHUB_OUTPUT
+          echo "task_role_arn=$TASK_ROLE_ARN" >> $GITHUB_OUTPUT
+          echo "sqs_queue_url=$SQS_QUEUE_URL" >> $GITHUB_OUTPUT
+          echo "sqs_dlq_url=$SQS_DLQ_URL" >> $GITHUB_OUTPUT
+          echo "secret_arn=$SECRET_ARN" >> $GITHUB_OUTPUT
+          
+          echo "Infrastructure values:"
+          echo "  ECR Repository: $ECR_REPO"
+          echo "  Execution Role: $EXECUTION_ROLE_ARN"
+          echo "  Task Role: $TASK_ROLE_ARN"
+          echo "  SQS Queue: $SQS_QUEUE_URL"
+          echo "  SQS DLQ: $SQS_DLQ_URL"
+          echo "  Secret ARN: $SECRET_ARN"
+
+      - name: Render Task Definition with Jsonnet
         id: render
         run: |
-          # These would come from Terraform outputs or AWS SSM in real deployment
-          ECR_REPO="123456789.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.PROJECT_NAME }}/staging/${{ env.SERVICE_NAME }}"
-          EXECUTION_ROLE_ARN="arn:aws:iam::123456789:role/${{ env.PROJECT_NAME }}-staging-ecs-execution-role"
-          TASK_ROLE_ARN="arn:aws:iam::123456789:role/${{ env.PROJECT_NAME }}-staging-ecs-task-role"
-          SQS_QUEUE_URL="https://sqs.${{ env.AWS_REGION }}.amazonaws.com/123456789/${{ env.PROJECT_NAME }}-staging-tasks"
-          SQS_DLQ_URL="https://sqs.${{ env.AWS_REGION }}.amazonaws.com/123456789/${{ env.PROJECT_NAME }}-staging-tasks-dlq"
-          SECRET_ARN="arn:aws:secretsmanager:${{ env.AWS_REGION }}:123456789:secret:${{ env.PROJECT_NAME }}/staging/worker-secret"
-          
           cd task-definitions
           jsonnet \
             --ext-str IMAGE_TAG="${{ needs.build.outputs.image_tag }}" \
             --ext-str ENVIRONMENT="staging" \
             --ext-str AWS_REGION="${{ env.AWS_REGION }}" \
-            --ext-str ECR_REPOSITORY="$ECR_REPO" \
-            --ext-str EXECUTION_ROLE_ARN="$EXECUTION_ROLE_ARN" \
-            --ext-str TASK_ROLE_ARN="$TASK_ROLE_ARN" \
-            --ext-str SQS_QUEUE_URL="$SQS_QUEUE_URL" \
-            --ext-str SQS_DLQ_URL="$SQS_DLQ_URL" \
-            --ext-str SECRET_ARN="$SECRET_ARN" \
+            --ext-str ECR_REPOSITORY="${{ steps.infra.outputs.ecr_repo }}" \
+            --ext-str EXECUTION_ROLE_ARN="${{ steps.infra.outputs.execution_role_arn }}" \
+            --ext-str TASK_ROLE_ARN="${{ steps.infra.outputs.task_role_arn }}" \
+            --ext-str SQS_QUEUE_URL="${{ steps.infra.outputs.sqs_queue_url }}" \
+            --ext-str SQS_DLQ_URL="${{ steps.infra.outputs.sqs_dlq_url }}" \
+            --ext-str SECRET_ARN="${{ steps.infra.outputs.secret_arn }}" \
             ${{ env.SERVICE_NAME }}.jsonnet > ../task-definition.json
           cd ..
           
           echo "Generated task definition:"
           cat task-definition.json
 
-      # Dummy steps for testing
-      - name: Deploy to ECS Staging (dummy)
+      - name: Register Task Definition in LocalStack
+        id: task-def
         run: |
-          echo "Would deploy to staging with task definition:"
-          cat task-definition.json
+          echo "Registering task definition in LocalStack..."
+          TASK_DEF_ARN=$(awslocal ecs register-task-definition \
+            --cli-input-json file://task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+          echo "Registered task definition: $TASK_DEF_ARN"
 
-      # Real implementation (uncomment when ready):
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      #     aws-region: ${{ env.AWS_REGION }}
-      #
-      # - name: Register task definition
-      #   id: task-def
-      #   run: |
-      #     TASK_DEF_ARN=$(aws ecs register-task-definition \
-      #       --cli-input-json file://task-definition.json \
-      #       --query 'taskDefinition.taskDefinitionArn' \
-      #       --output text)
-      #     echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
-      #
-      # - name: Update ECS service
-      #   run: |
-      #     aws ecs update-service \
-      #       --cluster ${{ env.PROJECT_NAME }}-staging \
-      #       --service ${{ env.PROJECT_NAME }}-staging-${{ env.SERVICE_NAME }} \
-      #       --task-definition ${{ steps.task-def.outputs.task_def_arn }} \
-      #       --force-new-deployment
-      #
-      # - name: Wait for service stability
-      #   run: |
-      #     aws ecs wait services-stable \
-      #       --cluster ${{ env.PROJECT_NAME }}-staging \
-      #       --services ${{ env.PROJECT_NAME }}-staging-${{ env.SERVICE_NAME }}
+      - name: Update ECS Service in LocalStack
+        run: |
+          CLUSTER="${{ env.PROJECT_NAME }}-staging"
+          SERVICE="${{ env.PROJECT_NAME }}-staging-${{ env.SERVICE_NAME }}"
+          
+          echo "Updating ECS service..."
+          echo "  Cluster: $CLUSTER"
+          echo "  Service: $SERVICE"
+          echo "  Task Definition: ${{ steps.task-def.outputs.task_def_arn }}"
+          
+          awslocal ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "${{ steps.task-def.outputs.task_def_arn }}" \
+            --force-new-deployment
+          
+          echo "✅ Service updated successfully"
+
+      - name: Verify Deployment
+        run: |
+          CLUSTER="${{ env.PROJECT_NAME }}-staging"
+          SERVICE="${{ env.PROJECT_NAME }}-staging-${{ env.SERVICE_NAME }}"
+          
+          echo "Verifying deployment..."
+          awslocal ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query 'services[0].{status:status,runningCount:runningCount,desiredCount:desiredCount,taskDefinition:taskDefinition}'
 
       - name: Staging summary
         run: |
           echo "## 🟡 Staging Deployed - ${{ env.SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Staging deployment successful" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Task Definition | \`${{ steps.task-def.outputs.task_def_arn }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Tag | \`${{ needs.build.outputs.image_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | LocalStack (staging) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "⏳ **Waiting for production approval...**" >> $GITHUB_STEP_SUMMARY
 
@@ -195,76 +234,132 @@ jobs:
       id-token: write
       contents: read
 
+    services:
+      localstack:
+        image: localstack/localstack-pro:latest
+        ports:
+          - 4566:4566
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling
+          DEBUG: 0
+        options: >-
+          --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Jsonnet
+      - name: Install Dependencies
         run: |
+          pip install localstack awscli-local
           sudo apt-get update && sudo apt-get install -y jsonnet
 
-      - name: Render task definition with Jsonnet
+      - name: Import LocalStack State
+        run: |
+          STATE_FILE="terraform/aws/environments/prod/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing LocalStack state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+
+      - name: Get Infrastructure Values from LocalStack
+        id: infra
+        run: |
+          # Get ECR repository URL (using LocalStack format)
+          ECR_REPO="000000000000.dkr.ecr.${{ env.AWS_REGION }}.localhost.localstack.cloud:4566/${{ env.PROJECT_NAME }}-prod-${{ env.SERVICE_NAME }}"
+          
+          # Get IAM role ARNs
+          EXECUTION_ROLE_ARN=$(awslocal iam get-role --role-name ${{ env.PROJECT_NAME }}-prod-ecs-execution-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-prod-ecs-execution-role")
+          TASK_ROLE_ARN=$(awslocal iam get-role --role-name ${{ env.PROJECT_NAME }}-prod-ecs-task-role --query 'Role.Arn' --output text 2>/dev/null || echo "arn:aws:iam::000000000000:role/${{ env.PROJECT_NAME }}-prod-ecs-task-role")
+          
+          # Get SQS Queue URLs
+          SQS_QUEUE_URL=$(awslocal sqs get-queue-url --queue-name ${{ env.PROJECT_NAME }}-prod-tasks --query 'QueueUrl' --output text 2>/dev/null || echo "http://localhost:4566/000000000000/${{ env.PROJECT_NAME }}-prod-tasks")
+          SQS_DLQ_URL=$(awslocal sqs get-queue-url --queue-name ${{ env.PROJECT_NAME }}-prod-tasks-dlq --query 'QueueUrl' --output text 2>/dev/null || echo "http://localhost:4566/000000000000/${{ env.PROJECT_NAME }}-prod-tasks-dlq")
+          
+          # Get Secret ARN
+          SECRET_ARN=$(awslocal secretsmanager describe-secret --secret-id ${{ env.PROJECT_NAME }}/prod/worker-secret --query 'ARN' --output text 2>/dev/null || echo "arn:aws:secretsmanager:${{ env.AWS_REGION }}:000000000000:secret:${{ env.PROJECT_NAME }}/prod/worker-secret")
+          
+          echo "ecr_repo=$ECR_REPO" >> $GITHUB_OUTPUT
+          echo "execution_role_arn=$EXECUTION_ROLE_ARN" >> $GITHUB_OUTPUT
+          echo "task_role_arn=$TASK_ROLE_ARN" >> $GITHUB_OUTPUT
+          echo "sqs_queue_url=$SQS_QUEUE_URL" >> $GITHUB_OUTPUT
+          echo "sqs_dlq_url=$SQS_DLQ_URL" >> $GITHUB_OUTPUT
+          echo "secret_arn=$SECRET_ARN" >> $GITHUB_OUTPUT
+          
+          echo "Infrastructure values:"
+          echo "  ECR Repository: $ECR_REPO"
+          echo "  Execution Role: $EXECUTION_ROLE_ARN"
+          echo "  Task Role: $TASK_ROLE_ARN"
+          echo "  SQS Queue: $SQS_QUEUE_URL"
+          echo "  SQS DLQ: $SQS_DLQ_URL"
+          echo "  Secret ARN: $SECRET_ARN"
+
+      - name: Render Task Definition with Jsonnet
         id: render
         run: |
-          # These would come from Terraform outputs or AWS SSM in real deployment
-          ECR_REPO="123456789.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.SERVICE_NAME }}"
-          EXECUTION_ROLE_ARN="arn:aws:iam::123456789:role/${{ env.PROJECT_NAME }}-dummy-ecs-execution-role"
-          TASK_ROLE_ARN="arn:aws:iam::123456789:role/${{ env.PROJECT_NAME }}-dummy-ecs-task-role"
-          SQS_QUEUE_URL="dummy"
-          SQS_DLQ_URL="dummy"
-          SECRET_ARN="dummy-secret-arn"
-          
           cd task-definitions
           jsonnet \
             --ext-str IMAGE_TAG="${{ needs.build.outputs.image_tag }}" \
             --ext-str ENVIRONMENT="prod" \
             --ext-str AWS_REGION="${{ env.AWS_REGION }}" \
-            --ext-str ECR_REPOSITORY="$ECR_REPO" \
-            --ext-str EXECUTION_ROLE_ARN="$EXECUTION_ROLE_ARN" \
-            --ext-str TASK_ROLE_ARN="$TASK_ROLE_ARN" \
-            --ext-str SQS_QUEUE_URL="$SQS_QUEUE_URL" \
-            --ext-str SQS_DLQ_URL="$SQS_DLQ_URL" \
-            --ext-str SECRET_ARN="$SECRET_ARN" \
+            --ext-str ECR_REPOSITORY="${{ steps.infra.outputs.ecr_repo }}" \
+            --ext-str EXECUTION_ROLE_ARN="${{ steps.infra.outputs.execution_role_arn }}" \
+            --ext-str TASK_ROLE_ARN="${{ steps.infra.outputs.task_role_arn }}" \
+            --ext-str SQS_QUEUE_URL="${{ steps.infra.outputs.sqs_queue_url }}" \
+            --ext-str SQS_DLQ_URL="${{ steps.infra.outputs.sqs_dlq_url }}" \
+            --ext-str SECRET_ARN="${{ steps.infra.outputs.secret_arn }}" \
             ${{ env.SERVICE_NAME }}.jsonnet > ../task-definition.json
           cd ..
           
           echo "Generated task definition:"
           cat task-definition.json
 
-      # Dummy steps for testing
-      - name: Deploy to ECS Production (dummy)
+      - name: Register Task Definition in LocalStack
+        id: task-def
         run: |
-          echo "Deploy to production with task definition:"
-          cat task-definition.json
+          echo "Registering task definition in LocalStack..."
+          TASK_DEF_ARN=$(awslocal ecs register-task-definition \
+            --cli-input-json file://task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+          echo "Registered task definition: $TASK_DEF_ARN"
 
-      # Real implementation (uncomment when ready):
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      #     aws-region: ${{ env.AWS_REGION }}
-      #
-      # - name: Register task definition
-      #   id: task-def
-      #   run: |
-      #     TASK_DEF_ARN=$(aws ecs register-task-definition \
-      #       --cli-input-json file://task-definition.json \
-      #       --query 'taskDefinition.taskDefinitionArn' \
-      #       --output text)
-      #     echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
-      #
-      # - name: Update ECS service
-      #   run: |
-      #     aws ecs update-service \
-      #       --cluster ${{ env.PROJECT_NAME }}-prod \
-      #       --service ${{ env.PROJECT_NAME }}-prod-${{ env.SERVICE_NAME }} \
-      #       --task-definition ${{ steps.task-def.outputs.task_def_arn }} \
-      #       --force-new-deployment
-      #
-      # - name: Wait for service stability
-      #   run: |
-      #     aws ecs wait services-stable \
-      #       --cluster ${{ env.PROJECT_NAME }}-prod \
-      #       --services ${{ env.PROJECT_NAME }}-prod-${{ env.SERVICE_NAME }}
+      - name: Update ECS Service in LocalStack
+        run: |
+          CLUSTER="${{ env.PROJECT_NAME }}-prod"
+          SERVICE="${{ env.PROJECT_NAME }}-prod-${{ env.SERVICE_NAME }}"
+          
+          echo "Updating ECS service..."
+          echo "  Cluster: $CLUSTER"
+          echo "  Service: $SERVICE"
+          echo "  Task Definition: ${{ steps.task-def.outputs.task_def_arn }}"
+          
+          awslocal ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "${{ steps.task-def.outputs.task_def_arn }}" \
+            --force-new-deployment
+          
+          echo "✅ Service updated successfully"
+
+      - name: Verify Deployment
+        run: |
+          CLUSTER="${{ env.PROJECT_NAME }}-prod"
+          SERVICE="${{ env.PROJECT_NAME }}-prod-${{ env.SERVICE_NAME }}"
+          
+          echo "Verifying deployment..."
+          awslocal ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query 'services[0].{status:status,runningCount:runningCount,desiredCount:desiredCount,taskDefinition:taskDefinition}'
 
       - name: Production summary
         run: |
@@ -272,6 +367,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Service | **${{ env.SERVICE_NAME }}** |" >> $GITHUB_STEP_SUMMARY
+          echo "| Task Definition | \`${{ steps.task-def.outputs.task_def_arn }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Image Tag | \`${{ needs.build.outputs.image_tag }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Approved by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | LocalStack (prod) |" >> $GITHUB_STEP_SUMMARY
