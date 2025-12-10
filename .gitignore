@@ -4,8 +4,6 @@
 # Terraform
 .terraform/
 .terraform.lock.hcl
-*.tfstate
-*.tfstate.*
 *.tfplan
 tfplan
 crash.log
@@ -14,11 +12,13 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Terraform directories
-terraform/.terraform/
-terraform/*.tfstate
-terraform/*.tfstate.*
+# Terraform state (ignore workspace states, but allow environment states)
+terraform.tfstate.d/
 terraform/*.tfplan
+
+# Allow environment state files (for LocalStack testing in CI)
+!terraform/aws/environments/*/terraform.tfstate
+!terraform/aws/environments/*/localstack-state.zip
 
 # IDE
 .idea/

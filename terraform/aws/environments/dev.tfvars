@@ -9,6 +9,5 @@ aws_region  = "us-east-1"
 vpc_cidr = "10.0.0.0/16"
 
 # LocalStack (for local development)
-use_localstack      = false
+use_localstack      = true
 localstack_endpoint = "http://localhost:4566"
-

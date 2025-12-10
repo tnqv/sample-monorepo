@@ -55,10 +55,11 @@ jobs:
 
     services:
       localstack:
-        image: localstack/localstack:latest
+        image: localstack/localstack-pro:latest
         ports:
           - 4566:4566
         env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
           SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
           DEBUG: 0
         options: >-
@@ -90,6 +91,21 @@ jobs:
             curl -sf http://localhost:4566/_localstack/health > /dev/null && break
             sleep 2
           done
+      # These steps are only simulating the actual deployment
+      - name: Install LocalStack CLI
+        run: pip install localstack
+
+      - name: Import LocalStack State
+        run: |
+          # Import pre-provisioned state for this environment
+          STATE_FILE="${{ env.TF_WORKING_DIR }}/environments/${{ matrix.workspace }}/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        # This step is only simulating the actual deployment
 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -98,6 +114,18 @@ jobs:
       - name: Select/Create Workspace
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform workspace select -or-create ${{ matrix.workspace }}
+
+      - name: Restore Terraform State
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          STATE_FILE="environments/${{ matrix.workspace }}/terraform.tfstate"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Restoring terraform state from $STATE_FILE"
+            mkdir -p terraform.tfstate.d/${{ matrix.workspace }}
+            cp "$STATE_FILE" terraform.tfstate.d/${{ matrix.workspace }}/terraform.tfstate
+          else
+            echo "No state file found at $STATE_FILE"
+          fi
 
       - name: Terraform Plan
         id: plan
@@ -157,10 +185,11 @@ jobs:
 
     services:
       localstack:
-        image: localstack/localstack:latest
+        image: localstack/localstack-pro:latest
         ports:
           - 4566:4566
         env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
           SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
           DEBUG: 0
         options: >-
@@ -192,7 +221,20 @@ jobs:
             curl -sf http://localhost:4566/_localstack/health > /dev/null && break
             sleep 2
           done
+      # These steps are only simulating the actual deployment
+      - name: Install LocalStack CLI
+        run: pip install localstack
 
+      - name: Import LocalStack State
+        run: |
+          STATE_FILE="${{ env.TF_WORKING_DIR }}/environments/${{ matrix.workspace }}/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        # This step is only simulating the actual deployment
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
@@ -200,6 +242,18 @@ jobs:
       - name: Select/Create Workspace
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform workspace select -or-create ${{ matrix.workspace }}
+
+      - name: Restore Terraform State
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          STATE_FILE="environments/${{ matrix.workspace }}/terraform.tfstate"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Restoring terraform state from $STATE_FILE"
+            mkdir -p terraform.tfstate.d/${{ matrix.workspace }}
+            cp "$STATE_FILE" terraform.tfstate.d/${{ matrix.workspace }}/terraform.tfstate
+          else
+            echo "No state file found at $STATE_FILE"
+          fi
 
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -241,10 +295,11 @@ jobs:
 
     services:
       localstack:
-        image: localstack/localstack:latest
+        image: localstack/localstack-pro:latest
         ports:
           - 4566:4566
         env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
           SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
           DEBUG: 0
         options: >-
@@ -279,7 +334,20 @@ jobs:
             curl -sf http://localhost:4566/_localstack/health > /dev/null && break
             sleep 2
           done
+      # These steps are only simulating the actual deployment
+      - name: Install LocalStack CLI
+        run: pip install localstack
 
+      - name: Import LocalStack State
+        run: |
+          STATE_FILE="${{ env.TF_WORKING_DIR }}/environments/staging/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        # This step is only simulating the actual deployment
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
@@ -287,6 +355,18 @@ jobs:
       - name: Select Workspace
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform workspace select -or-create staging
+
+      - name: Restore Terraform State
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          STATE_FILE="environments/staging/terraform.tfstate"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Restoring terraform state from $STATE_FILE"
+            mkdir -p terraform.tfstate.d/staging
+            cp "$STATE_FILE" terraform.tfstate.d/staging/terraform.tfstate
+          else
+            echo "No state file found at $STATE_FILE"
+          fi
 
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -332,10 +412,11 @@ jobs:
 
     services:
       localstack:
-        image: localstack/localstack:latest
+        image: localstack/localstack-pro:latest
         ports:
           - 4566:4566
         env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
           SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
           DEBUG: 0
         options: >-
@@ -370,7 +451,20 @@ jobs:
             curl -sf http://localhost:4566/_localstack/health > /dev/null && break
             sleep 2
           done
+      # These steps are only simulating the actual deployment
+      - name: Install LocalStack CLI
+        run: pip install localstack
 
+      - name: Import LocalStack State
+        run: |
+          STATE_FILE="${{ env.TF_WORKING_DIR }}/environments/prod/localstack-state.zip"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Importing state from $STATE_FILE"
+            localstack state import "$STATE_FILE"
+          else
+            echo "No state file found at $STATE_FILE, starting fresh"
+          fi
+        # This step is only simulating the actual deployment 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
@@ -378,6 +472,18 @@ jobs:
       - name: Select Workspace
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform workspace select -or-create prod
+
+      - name: Restore Terraform State
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          STATE_FILE="environments/prod/terraform.tfstate"
+          if [ -f "$STATE_FILE" ]; then
+            echo "Restoring terraform state from $STATE_FILE"
+            mkdir -p terraform.tfstate.d/prod
+            cp "$STATE_FILE" terraform.tfstate.d/prod/terraform.tfstate
+          else
+            echo "No state file found at $STATE_FILE"
+          fi
 
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
