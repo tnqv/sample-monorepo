@@ -60,7 +60,7 @@ jobs:
           - 4566:4566
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
-          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling,elasticloadbalancingv2
           DEBUG: 0
         options: >-
           --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
@@ -105,7 +105,8 @@ jobs:
           else
             echo "No state file found at $STATE_FILE, starting fresh"
           fi
-        # This step is only simulating the actual deployment
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -190,7 +191,7 @@ jobs:
           - 4566:4566
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
-          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling
           DEBUG: 0
         options: >-
           --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
@@ -234,7 +235,8 @@ jobs:
           else
             echo "No state file found at $STATE_FILE, starting fresh"
           fi
-        # This step is only simulating the actual deployment
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
@@ -300,7 +302,7 @@ jobs:
           - 4566:4566
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
-          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling
           DEBUG: 0
         options: >-
           --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
@@ -347,7 +349,8 @@ jobs:
           else
             echo "No state file found at $STATE_FILE, starting fresh"
           fi
-        # This step is only simulating the actual deployment
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
@@ -417,7 +420,7 @@ jobs:
           - 4566:4566
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
-          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elasticloadbalancingv2
+          SERVICES: ec2,ecs,ecr,iam,s3,sqs,secretsmanager,sts,logs,elbv2,application-autoscaling
           DEBUG: 0
         options: >-
           --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
@@ -464,7 +467,8 @@ jobs:
           else
             echo "No state file found at $STATE_FILE, starting fresh"
           fi
-        # This step is only simulating the actual deployment 
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }} 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
