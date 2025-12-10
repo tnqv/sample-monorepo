@@ -7,6 +7,9 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  # State is managed per workspace in terraform.tfstate.d/<workspace>/
+  # Use: terraform workspace select <env>
 }
 
 provider "aws" {
