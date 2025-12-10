@@ -12,13 +12,13 @@ on:
     branches:
       - main
     paths:
-      - 'terraform/**'
+      - 'terraform/aws/**'
       - '.github/workflows/terraform.yml'
   pull_request:
     branches:
       - main
     paths:
-      - 'terraform/**'
+      - 'terraform/aws/**'
   workflow_dispatch:
     inputs:
       environment:
@@ -39,7 +39,7 @@ on:
 env:
   TF_VERSION: '1.13.1'
   AWS_REGION: us-east-1
-  TF_WORKING_DIR: terraform
+  TF_WORKING_DIR: terraform/aws
 
 jobs:
   # ===========================================
