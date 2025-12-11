@@ -164,7 +164,7 @@ terraform/aws/
 
 | Category | Owner | Examples | File |
 |----------|-------|----------|------|
-| **Shared Infrastructure** | Devops Team | SQS queues, Secrets Manager, VPC, ALB | `shared-infrastructure.tf` |
+| **Shared Infrastructure** | Devops Team | SQS queues, Secrets Manager and SES | `shared-infrastructure.tf` |
 | **Service Infrastructure** | Backend Engineers | ECS services, auto-scaling, ALB rules | `service-*.tf` |
 
 #### Shared Infrastructure (`shared-infrastructure.tf`)
@@ -534,7 +534,7 @@ Explanation:
 - **sampleapi**: HTTP API service that exposes REST endpoints, publishes messages to SQS, and exposes Prometheus metrics
 - **sampleworker**: Background worker service that consumes messages from SQS, processes tasks asynchronously, and includes distributed tracing
   - This will be simulated with email sent in 5s interval
-- **sampleworker_2**: Similar to sampleworker but with failure injection enabled to simulate errors and observe SLO violation metrics
+- **sampleworker_2**: Can be acting as a replica of sampleworker but with email failure injection enabled to simulate errors and observe SLO violation metrics
 
 
 #### Step 2: Access Grafana
@@ -627,7 +627,7 @@ Or manually open with Grafana:
 ![log correlated tracing 3](images/logs-correlated-with-traces-3.png)
 
 
-### Step 8: Simulate SLO violation by sending email unsucessfully
+#### Step 8: Simulate SLO violation by sending email unsucessfully
 
 - In `docker-compose.local.yaml`
 
@@ -651,3 +651,23 @@ sampleworker-fail-simulate:
 ![slo violation email](images/slo-violation-email-failed.png)
 
 ![error logs with trace](images/error-logs-with-traced.png)
+
+### SLO Explanation
+
+#### Message-Level vs Service-Level Metrics
+
+**Service-Level Metrics** (see `monitoring/grafana/dashboards/slo-dashboard.json` sections: "Service-Level: API Service SLO" and "Service-Level: Email Worker SLO"):
+- Aggregated metrics across all operations (e.g., `sum(worker_emails_sent_total)`, overall availability %, error budget)
+- Relating application runtime, the resources usage metrics like memory usages, or go configuration like go routine, garbage collection timing
+- Uptime for each service running by calculating how much `http_requests_total`
+- Focus: "Is the service healthy?" - monitors SLO compliance and overall service health
+
+**Message-Level Metrics** (see `monitoring/grafana/dashboards/slo-dashboard.json` section: "Message-Level: Individual Email Processing Tracking"):
+- Per-message performance metrics (e.g., `histogram_quantile(0.95, sum(rate(worker_email_duration_seconds_bucket{job=~\"sampleworker.*\"}[5m])) by (le))` for email duration p50/p95/p99) 
+- Focus: "Why is it slow?" - helps debug individual message processing performance
+
+**Platform Level** metrics (skip from now since most metrics will collect from real AWS cloud environment)
+  - For the idea, these Platform metris can gather all of necessary resources from AWS like:
+    - ECS Cluster basic metrics with cpu utilization, memory utilization usage for each service running on clusters
+    - ALB: Application load balancer with 5xx errors in the platform
+    - etc
