@@ -15,21 +15,6 @@
 
 ![Architecture Diagram](images/overall-architecture.png)
 
-### Services
-
-#### sampleapi
-HTTP API service that:
-- Exposes REST endpoints (`/health`, `/api/*`)
-- Publishes messages to SQS queue
-- Exposes Prometheus metrics on `/metrics`
-
-#### sampleworker
-Background worker service that:
-- Consumes messages from SQS queue
-- Processes tasks asynchronously
-- Includes distributed tracing with OpenTelemetry
-- Exposes Prometheus metrics
-
 ### Project Structure
 
 ```
@@ -51,15 +36,43 @@ sample-monorepo/
 ├── terraform/aws/                # Infrastructure as Code
 │   ├── modules/                  # Reusable Terraform modules
 │   │   ├── ecs-fargate-service/  # ECS Fargate service module
+│   │   │   ├── main.tf
+│   │   │   ├── variables.tf
+│   │   │   └── outputs.tf
 │   │   └── sqs-queue/            # SQS queue module
+│   │       ├── main.tf
+│   │       ├── variables.tf
+│   │       └── outputs.tf
 │   ├── environments/             # Environment-specific configs
+│   │   ├── dev.tfvars
 │   │   ├── staging.tfvars
 │   │   └── prod.tfvars
-│   └── *.tf                      # Main Terraform configs
+│   ├── main.tf                   # Provider configuration
+│   ├── backend.tf                # Remote state backend
+│   ├── variables.tf               # Variable definitions
+│   ├── data.tf                   # Data sources
+│   ├── vpc.tf                    # VPC, subnets, NAT gateway
+│   ├── sg.tf                     # Security groups
+│   ├── alb.tf                    # Application Load Balancer
+│   ├── ecs.tf                    # ECS Cluster, IAM roles
+│   ├── shared-infrastructure.tf  # SQS, Secrets Manager, SES
+│   ├── service-sampleapi.tf      # API service definition
+│   ├── service-sampleworker.tf    # Worker service definition
+│   ├── outputs.tf                # Output values
+│   └── terraform.tfvars          # Default variables
 ├── monitoring/                   # Observability stack
 │   ├── prometheus/               # Metrics collection
+│   │   ├── prometheus.yml        # Prometheus configuration
+│   │   └── alerts.yml            # Alert rules
 │   ├── grafana/                  # Dashboards & visualization
+│   │   ├── dashboards/           # Dashboard definitions
+│   │   │   ├── services-overview.json
+│   │   │   └── slo-dashboard.json
+│   │   └── provisioning/         # Auto-provisioning configs
+│   │       ├── dashboards/
+│   │       └── datasources/
 │   └── promtail/                 # Log aggregation
+│       └── promtail-config.yml  # Promtail configuration
 ├── .github/workflows/            # CI/CD pipelines
 │   ├── ci.yml                    # Build & test on PRs
 │   ├── terraform.yml             # Infrastructure deployment
@@ -77,7 +90,8 @@ sample-monorepo/
 - Terraform 1.13+
 - jsonnet CLI (`brew install jsonnet` or `apt-get install jsonnet`)
 - AWS CLI v2
-- LocalStack (Pro license required for ECS features in CI/CD)
+- Github Action
+- LocalStack (Pro license required for plan and apply ECS features in CI/CD)
 
 ### **Important points**:
 - The implementation is not running on a real cloud services, so there will be some **limitation**:
@@ -150,10 +164,18 @@ The infrastructure is organized into two categories:
 
 ```
 terraform/aws/
-├── shared-infrastructure.tf    # DevOps team manages (SQS, Secrets)
+├── shared-infrastructure.tf    # DevOps team manages (SQS, Secrets, SES)
 ├── service-sampleapi.tf        # Developer defines (per-service)
 ├── service-sampleworker.tf     # Developer defines (per-service)
-├── ...
+├── main.tf                     # Provider configuration
+├── backend.tf                   # Remote state backend
+├── variables.tf                 # Variable definitions
+├── data.tf                      # Data sources
+├── vpc.tf                       # VPC, subnets, NAT gateway
+├── sg.tf                        # Security groups
+├── alb.tf                       # Application Load Balancer
+├── ecs.tf                       # ECS Cluster, IAM roles
+├── outputs.tf                   # Output values
 └── modules/
     ├── ecs-fargate-service/    # Reusable service module
     └── sqs-queue/              # Reusable queue module
@@ -161,8 +183,8 @@ terraform/aws/
 
 | Category | Owner | Examples | File |
 |----------|-------|----------|------|
-| **Shared Infrastructure** | Devops Team | SQS queues, Secrets Manager and SES | `shared-infrastructure.tf` |
-| **Service Infrastructure** | Backend Engineers | ECS services, auto-scaling, ALB rules | `service-*.tf` |
+| **Shared Infrastructure** | Devops Team | SQS queues, Secrets Manager, SES | `shared-infrastructure.tf` |
+| **Service Infrastructure** | Backend Engineers | ECS services, auto-scaling, ALB rules | `service-sampleapi.tf`, `service-sampleworker.tf` |
 
 #### Shared Infrastructure (`shared-infrastructure.tf`)
 
@@ -207,6 +229,7 @@ resource "aws_secretsmanager_secret" "worker_secret" {
 **Why Shared Infrastructure?**
 - **SQS Queues**: Multiple services may publish/consume from the same queue
 - **Secrets Manager**: Centralized secret management with rotation support
+- **SES**: Email sending service shared across worker services
 
 ### Developers provision resources to their own service
 
@@ -528,7 +551,7 @@ Explanation:
 - **Grafana**: Visualization platform that queries Prometheus and Loki to display dashboards, graphs, and alerts
 - **Jaeger UI**: Distributed tracing UI for viewing request flows across services and analyzing performance bottlenecks
 - **Loki**: Log aggregation system that collects and stores logs from all services, queryable via LogQL
-- **sampleapi**: HTTP API service that exposes REST endpoints, publishes messages to SQS, and exposes Prometheus metrics
+- **sampleapi**: HTTP API service that exposes REST endpoints (`/healthz`), publishes messages to SQS, and exposes Prometheus metrics
 - **sampleworker**: Background worker service that consumes messages from SQS, processes tasks asynchronously, and includes distributed tracing
   - This will be simulated with email sent in 5s interval
 - **sampleworker_2**: Can be acting as a replica of sampleworker but with email failure injection enabled to simulate errors and observe SLO violation metrics
