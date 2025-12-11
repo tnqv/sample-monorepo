@@ -9,7 +9,7 @@
 # ===========================================
 
 locals {
-  ses_sender_email = "noreply@${var.ses_domain}"
+  ses_sender_email           = "noreply@${var.ses_domain}"
   ses_configuration_set_name = "${var.project_name}-${var.environment}-ses-config"
 }
 
