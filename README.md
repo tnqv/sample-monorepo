@@ -1,16 +1,14 @@
 # Sample Monorepo
 
-A production-ready monorepo demonstrating microservices architecture with ECS Fargate, Terraform infrastructure-as-code, and comprehensive CI/CD pipelines.
-
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
 - [Services](#services)
 - [Prerequisites](#prerequisites)
 - [Important Points](#important-points)
-- [Scenario 1: IaC Provisioning for the Platform](#scenario-1-iac-provisioning-for-the-platform)
-- [Scenario 2: Release New Version Application](#scenario-2-release-new-version-application)
-- [Scenario 3: Monitoring (SLI/SLO and Distributed Tracing)](#scenario-3-monitoring-slo-definition-and-distributed-tracing-stacks)
+- [Walkthrough 1: IaC Provisioning for the Platform](#walkthrough-1-iac-provisioning-for-the-platform)
+- [Walkthrough 2: Release New Version Application](#walkthrough-2-release-new-version-application)
+- [Walkthrough 3: Monitoring (SLI/SLO and Distributed Tracing)](#walkthrough-3-monitoring-slo-definition-and-distributed-tracing-stacks)
 
 ---
 
@@ -92,7 +90,7 @@ Background worker service that:
   - Application release requiring applying new task-definitions to ECS services which running in localstack, to update a new task on ECS in localstack via github action, `Docker in Docker` currently not supporting, so applying task definition is only mocking ref
   - Monitoring stacks requiring spin up from mounted volume services stack (with loki, prometheus and jaeger), localstack has some limitation and requiring complex setup, so this part will be set up and run locally
 
-## Scenario 1: IaC provisioning for the Platform
+## Walkthrough 1: IaC provisioning for the Platform
 
 ### User Story
 
@@ -105,7 +103,6 @@ Background worker service that:
 #### Infrastructure Overview
 
 ![terraform-flow](images/terraform-flow-architecture.png)
-
 
 ### Terraform Modules
 
@@ -334,11 +331,13 @@ PR Merged → Manual workflow_dispatch
 
 ---
 
-## Scenario 2: Release New Version Application
+## Walkthrough 2: Release New Version Application
 
 ### User Story
 
 > *"As a Backend Engineer, when I merge code to the release branch, CI/CD should automatically deploy my application to staging, and after approval, to production."*
+
+General flow:
 
 ![release-application-flow](images/ci-cd-release-application.png)
 
@@ -486,7 +485,7 @@ aws ecs update-service \
 
 ---
 
-## Scenario 3: Monitoring (SLI/SLO and Distributed Tracing)
+## Walkthrough 3: Monitoring (SLI/SLO and Distributed Tracing)
 
 ### User Story
 
@@ -500,139 +499,155 @@ aws ecs update-service \
 
 ### How
 
-The monitoring stack provides three pillars of observability:
+This example demonstrates how to start the monitoring stack locally and view metrics in Grafana dashboards including SLO defined.
 
-```
-┌───────────────────────────────────────────────────────────────┐
-│                     Observability Stack                       │
-├───────────────────────────────────────────────────────────────┤
-│                                                               │
-│    ┌──────────┐    ┌──────────┐    ┌──────────┐               │
-│    │  Metrics │    │   Logs   │    │  Traces  │               │
-│    │          │    │          │    │          │               │
-│    │Prometheus│    │   Loki   │    │  Jaeger  │               │
-│    └────┬─────┘    └────┬─────┘    └────┬─────┘               │
-│         │               │               │                     │
-│         └───────────────┼───────────────┘                     │
-│                         │                                     │
-│                         ▼                                     │
-│                 ┌──────────────┐                              │
-│                 │   Grafana    │                              │
-│                 │  Dashboards  │                              │
-│                 └──────────────┘                              │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
+#### Step 1: Start the Monitoring Stack
+
+Start all services including the monitoring stack:
+
+```bash
+docker-compose -f docker-compose.local.yml up -d
 ```
 
-#### 1. Metrics (Prometheus)
+Wait for all services to be healthy (check with `docker-compose ps`).
 
-Services expose metrics at `/metrics` endpoint:
+![monitor architecture diagram](images/local-monitoring-architect.png)
 
-```go
-// Example metrics in sampleapi
-http_requests_total{method="GET", endpoint="/health", status="200"}
-http_request_duration_seconds{method="GET", endpoint="/health"}
+**Access services:**
+
+| Service    | URL                          | Credentials |
+|------------|------------------------------|-------------|
+| Prometheus     | http://localhost:9090      | N/A |
+| Grafana        | http://localhost:3000      | admin/admin |
+| Jaeger UI      | http://localhost:16686     | N/A |
+| Loki           | http://localhost:3100      | N/A |
+| sampleapi       | http://localhost:8080      | N/A |
+| sampleworker   | N/A                        | N/A |
+| sampleworker_2 (for fail scenarios) | N/A   | N/A |
+
+Explanation:
+
+- **Prometheus**: Metrics collection and storage system that scrapes metrics from services and stores time-series data
+- **Grafana**: Visualization platform that queries Prometheus and Loki to display dashboards, graphs, and alerts
+- **Jaeger UI**: Distributed tracing UI for viewing request flows across services and analyzing performance bottlenecks
+- **Loki**: Log aggregation system that collects and stores logs from all services, queryable via LogQL
+- **sampleapi**: HTTP API service that exposes REST endpoints, publishes messages to SQS, and exposes Prometheus metrics
+- **sampleworker**: Background worker service that consumes messages from SQS, processes tasks asynchronously, and includes distributed tracing
+  - This will be simulated with email sent in 5s interval
+- **sampleworker_2**: Similar to sampleworker but with failure injection enabled to simulate errors and observe SLO violation metrics
+
+
+#### Step 2: Access Grafana
+
+1. Open Grafana in your browser: `http://localhost:3000`
+2. Login with credentials:
+   - Username: `admin`
+   - Password: `admin`
+3. You'll be prompted to change the password on first login (optional for local development)
+
+#### Step 3: View Pre-built Dashboards
+
+Grafana automatically loads the pre-configured dashboards. Navigate to `http://localhost:3000/dashboards`:
+
+**Services Overview Dashboard:**
+- Shows real-time health status for all services (sampleapi, sampleworker)
+- Displays request rates, error rates, and latency metrics
+- Monitor service uptime and response times
+
+**SLO Dashboard:**
+- Tracks SLI metrics (latency percentiles: p50, p95, p99)
+- Shows error budgets and error rates for email sending from workers
+- Displays throughput metrics (requests per second)
+
+#### Step 4: Generate Traffic to View Metrics
+
+Generate some traffic to see metrics populate:
+
+```bash
+# Generate requests to sampleapi
+for i in {1..10}; do
+  curl http://localhost:8080/healthz
+  
+  sleep 1
+done
 ```
 
-**Key SLIs tracked:**
-- Request latency (p50, p95, p99)
-- Request throughput (requests/sec)
-- Error rate (4xx, 5xx)
-- Go runtime metrics (goroutines, memory, GC)
+The worker services will process messages from the queue, and you'll see:
+- **Metrics** updating in Grafana dashboards
+- **Traces** appearing in Jaeger UI (http://localhost:16686)
+- **Logs** being collected by Promtail and available in Grafana Explore view
 
-#### 2. Logs (Loki + Promtail)
+#### Step 5: Explore Metrics in Prometheus
 
-Promtail collects container logs and sends them to Loki with labels:
+You can also query metrics directly in Prometheus:
 
-```yaml
-# Log labels
-job: sampleworker
-container: sampleworker
-trace_id: abc123  # Correlated with traces
-```
-
-**Querying logs in Grafana:**
-```logql
-{job="sampleworker"} |= "error"
-{job="sampleapi"} | json | status >= 500
-{job="sampleworker"} |= "trace_id=abc123"
-```
-
-#### 3. Traces (Jaeger + OpenTelemetry)
-
-Services are instrumented with OpenTelemetry to capture distributed traces:
-
-```go
-// Example trace in sampleworker
-ctx, span := tracing.StartSpan(ctx, "ProcessTask")
-defer span.End()
-
-// Log with trace correlation
-utils.LogWithTrace(ctx).Info("Processing task", "task_id", taskID)
-```
-
-**Trace attributes:**
-- `service.name`: Service identifier
-- `environment`: staging/prod
-- `host.name`: Container ID
-- `trace_id`, `span_id`: For log correlation
-
-### Local Development Setup
-
-1. **Start the monitoring stack:**
-   ```bash
-   docker-compose -f docker-compose.local.yml up -d
+1. Access Prometheus UI: http://localhost:9092
+2. Try example queries after trying some bash script above:
    ```
-
-2. **Access services:**
-
-   | Service    | URL                          | Credentials |
-   |------------|------------------------------|-------------|
-   | Prometheus | http://localhost:9090        | N/A |
-   | Grafana    | http://localhost:3000        | admin/admin |
-   | Jaeger UI  | http://localhost:16686       | N/A |
-   | Loki       | http://localhost:3100        | N/A |
-
-3. **Run services locally:**
-   ```bash
-   # Terminal 1: API
-   cd cmd/sampleapi && go run main.go
+   # Request rate
+   rate(http_requests_total[5m])
    
-   # Terminal 2: Worker
-   cd cmd/sampleworker && go run main.go
-   ```
-
-4. **Generate test traffic:**
-   ```bash
-   # Health check
-   curl http://localhost:8080/health
+   # Error rate
+   rate(http_requests_total{status=~"5.."}[5m])
    
-   # Generate load
-   for i in {1..100}; do curl -s http://localhost:8080/health > /dev/null; done
+   # Latency percentile
+   histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
    ```
 
-### Pre-built Dashboards
+![prometheus-1](images/prometheus-1.png)
 
-| Dashboard | File | Description |
-|-----------|------|-------------|
-| Services Overview | `services-overview.json` | Real-time health, request rates, error rates |
-| SLO Dashboard | `slo-dashboard.json` | SLI metrics, error budgets, latency percentiles |
+#### Step 6: View Distributed Traces
 
-### Correlating Logs and Traces
+1. Access Jaeger UI: http://localhost:16686
+2. Select service: `sampleworker` or `sampleapi`
+3. Click **Find Traces** to see trace spans
+4. Click on a trace to view the complete request flow with timing
 
-When investigating an issue:
+![jaeger-1](images/jaeger-1.png)
 
-1. **Find the trace in Jaeger** → Note the `trace_id`
-2. **Search logs in Grafana/Loki:**
+#### Step 7: Correlate Logs with Traces
+
+Open this link:
+```
+http://localhost:3000/explore?schemaVersion=1&panes=%7B%2269v%22:%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bjob%3D%5C%22sampleworker%5C%22%7D%20%7C%3D%20%60%60%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22loki%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D%7D&orgId=1
+```
+
+Or manually open with Grafana:
+1. Go to **Explore** → Select **Loki** datasource
+3. Query logs by from sampleworker:
    ```logql
-   {job="sampleworker"} |= "trace_id=<your-trace-id>"
+   {job=~"sampleworker"} |= ``
    ```
-3. **View the complete request flow** with timing for each span
+4. View logs correlated with the specific trace to understand the complete request flow
 
-### SLO Definitions
+![log correlated tracing 1](images/logs-correlated-with-traces-1.png)
 
-| SLI | Target | Measurement |
-|-----|--------|-------------|
-| Availability | 99.9% | `sum(rate(http_requests_total{status!~"5.."})) / sum(rate(http_requests_total))` |
-| Latency (p99) | < 500ms | `histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))` |
-| Error Rate | < 0.1% | `sum(rate(http_requests_total{status=~"5.."})) / sum(rate(http_requests_total))` |
+![log correlated tracing 2](images/logs-correlated-with-traces-2.png)
+
+![log correlated tracing 3](images/logs-correlated-with-traces-3.png)
+
+
+### Step 8: Simulate SLO violation by sending email unsucessfully
+
+- In `docker-compose.local.yaml`
+
+- Allow `sampleworker-fail-simulate` to start up by uncommenting below code, note that `FAIL_SIMULATE_ENABLED` is enabled and this worker will always send failed email
+
+```
+sampleworker-fail-simulate:
+...
+  environment:
+    - FAIL_SIMULATE_ENABLED=true
+    ..
+...
+```
+
+- Start `sampleworker-fail-simulate` with `docker-compose -f docker-compose.local.yml up -d`
+
+- Access to grafana with:
+  - SLO-Dashboard: http://localhost:3000/d/slo-dashboard/slo-dashboard?orgId=1&from=2025-12-11T14:23:04.650Z&to=2025-12-11T17:23:04.650Z&timezone=browser&refresh=5s&viewPanel=panel-17
+  - **Explore** with **loki** datasource to view failed logs with trace
+
+![slo violation email](images/slo-violation-email-failed.png)
+
+![error logs with trace](images/error-logs-with-traced.png)

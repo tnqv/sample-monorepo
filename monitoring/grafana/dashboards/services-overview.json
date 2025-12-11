@@ -305,12 +305,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "worker_tasks_processed_total{job=\"sampleworker\"}",
-          "legendFormat": "Tasks Processed",
+          "expr": "worker_emails_sent_total{job=\"sampleworker\"}",
+          "legendFormat": "Emails Sent",
           "refId": "A"
         }
       ],
-      "title": "Total Tasks Processed",
+      "title": "Total Emails Sent",
       "type": "stat"
     },
     {
@@ -355,12 +355,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "rate(worker_tasks_processed_total{job=\"sampleworker\"}[1m])",
-          "legendFormat": "Tasks/sec",
+          "expr": "rate(worker_emails_sent_total{job=\"sampleworker\"}[1m])",
+          "legendFormat": "Emails/sec",
           "refId": "A"
         }
       ],
-      "title": "Task Processing Rate",
+      "title": "Email Sending Rate",
       "type": "timeseries"
     }
   ],

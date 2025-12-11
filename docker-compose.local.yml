@@ -43,6 +43,25 @@ services:
       - jaeger
     restart: unless-stopped
 
+  sampleworker-fail-simulate:
+    build:
+      context: .
+      dockerfile: cmd/sampleworker/Dockerfile
+    container_name: sampleworker-fail-simulate
+    environment:
+      - FAIL_SIMULATE_ENABLED=true
+      - WORKER_INTERVAL=5s
+      - METRICS_PORT=9091
+      - SECRET_KEY=local-dev-secret
+      - LOG_LEVEL=debug
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
+      - OTEL_SERVICE_NAME=sampleworker_2
+    networks:
+      - app-network
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
   # ===================
   # Monitoring Stack
   # ===================
@@ -92,7 +111,9 @@ services:
     container_name: loki
     ports:
       - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
     networks:
       - app-network
     restart: unless-stopped
@@ -134,4 +155,5 @@ networks:
 volumes:
   prometheus-data:
   grafana-data:
+  loki-data:
 

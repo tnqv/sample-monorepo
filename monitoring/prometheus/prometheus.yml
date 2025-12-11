@@ -22,9 +22,14 @@ scrape_configs:
     scrape_interval: 5s
 
   # Sample Worker service
-  - job_name: "sampleworker"
+  - job_name: "sampleworker-1"
     static_configs:
       - targets: ["sampleworker:9091"]
     metrics_path: /metrics
     scrape_interval: 5s
 
+  - job_name: "sampleworker-2"
+    static_configs:
+      - targets: ["sampleworker-fail-simulate:9091"]
+    metrics_path: /metrics
+    scrape_interval: 5s
