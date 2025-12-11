@@ -1,16 +1,14 @@
 # Sample Monorepo
 
-A production-ready monorepo demonstrating microservices architecture with ECS Fargate, Terraform infrastructure-as-code, and comprehensive CI/CD pipelines.
-
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
 - [Services](#services)
 - [Prerequisites](#prerequisites)
 - [Important Points](#important-points)
-- [Scenario 1: IaC Provisioning for the Platform](#scenario-1-iac-provisioning-for-the-platform)
-- [Scenario 2: Release New Version Application](#scenario-2-release-new-version-application)
-- [Scenario 3: Monitoring (SLI/SLO and Distributed Tracing)](#scenario-3-monitoring-slo-definition-and-distributed-tracing-stacks)
+- [Walkthrough 1: IaC Provisioning for the Platform](#walkthrough-1-iac-provisioning-for-the-platform)
+- [Walkthrough 2: Release New Version Application](#walkthrough-2-release-new-version-application)
+- [Walkthrough 3: Monitoring (SLI/SLO and Distributed Tracing)](#walkthrough-3-monitoring-slo-definition-and-distributed-tracing-stacks)
 
 ---
 
@@ -92,7 +90,7 @@ Background worker service that:
   - Application release requiring applying new task-definitions to ECS services which running in localstack, to update a new task on ECS in localstack via github action, `Docker in Docker` currently not supporting, so applying task definition is only mocking ref
   - Monitoring stacks requiring spin up from mounted volume services stack (with loki, prometheus and jaeger), localstack has some limitation and requiring complex setup, so this part will be set up and run locally
 
-## Scenario 1: IaC provisioning for the Platform
+## Walkthrough 1: IaC provisioning for the Platform
 
 ### User Story
 
@@ -105,7 +103,6 @@ Background worker service that:
 #### Infrastructure Overview
 
 ![terraform-flow](images/terraform-flow-architecture.png)
-
 
 ### Terraform Modules
 
@@ -334,11 +331,13 @@ PR Merged → Manual workflow_dispatch
 
 ---
 
-## Scenario 2: Release New Version Application
+## Walkthrough 2: Release New Version Application
 
 ### User Story
 
 > *"As a Backend Engineer, when I merge code to the release branch, CI/CD should automatically deploy my application to staging, and after approval, to production."*
+
+General flow:
 
 ![release-application-flow](images/ci-cd-release-application.png)
 
@@ -486,7 +485,7 @@ aws ecs update-service \
 
 ---
 
-## Scenario 3: Monitoring (SLI/SLO and Distributed Tracing)
+## Walkthrough 3: Monitoring (SLI/SLO and Distributed Tracing)
 
 ### User Story
 
@@ -501,28 +500,6 @@ aws ecs update-service \
 ### How
 
 The monitoring stack provides three pillars of observability:
-
-```
-┌───────────────────────────────────────────────────────────────┐
-│                     Observability Stack                       │
-├───────────────────────────────────────────────────────────────┤
-│                                                               │
-│    ┌──────────┐    ┌──────────┐    ┌──────────┐               │
-│    │  Metrics │    │   Logs   │    │  Traces  │               │
-│    │          │    │          │    │          │               │
-│    │Prometheus│    │   Loki   │    │  Jaeger  │               │
-│    └────┬─────┘    └────┬─────┘    └────┬─────┘               │
-│         │               │               │                     │
-│         └───────────────┼───────────────┘                     │
-│                         │                                     │
-│                         ▼                                     │
-│                 ┌──────────────┐                              │
-│                 │   Grafana    │                              │
-│                 │  Dashboards  │                              │
-│                 └──────────────┘                              │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
-```
 
 #### 1. Metrics (Prometheus)
 
