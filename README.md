@@ -337,7 +337,7 @@ PR Merged → Manual workflow_dispatch
 
 > *"As a Backend Engineer, when I merge code to the release branch, CI/CD should automatically deploy my application to staging, and after approval, to production."*
 
-General flow:
+General idea flow:
 
 ![release-application-flow](images/ci-cd-release-application.png)
 
