@@ -15,6 +15,7 @@ local sqsQueueUrl = std.extVar('SQS_QUEUE_URL');
 local sqsDlqUrl = std.extVar('SQS_DLQ_URL');
 local awsRegion = std.extVar('AWS_REGION');
 local secretArn = std.extVar('SECRET_ARN');
+local sesSenderEmail = std.extVar('SES_SENDER_EMAIL');
 
 // Project configuration
 local projectName = 'email-platform';
@@ -42,6 +43,7 @@ local container = base.container(serviceName, '%s:%s' % [ecrRepository, imageTag
     base.envVar('SQS_QUEUE_URL', sqsQueueUrl),
     base.envVar('SQS_DLQ_URL', sqsDlqUrl),
     base.envVar('AWS_REGION', awsRegion),
+    base.envVar('SES_SENDER_EMAIL', sesSenderEmail),
   ],
   
   secrets: [

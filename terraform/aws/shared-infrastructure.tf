@@ -8,6 +8,11 @@
 # SQS Queue for Tasks
 # ===========================================
 
+locals {
+  ses_sender_email = "noreply@${var.ses_domain}"
+  ses_configuration_set_name = "${var.project_name}-${var.environment}-ses-config"
+}
+
 module "tasks_queue" {
   source = "./modules/sqs-queue"
 
@@ -22,7 +27,6 @@ module "tasks_queue" {
   enable_dlq        = true
   max_receive_count = 3 # Max 3 attempts before moving to DLQ
 
-  # Grant permissions to ECS task role (use name, not id, for for_each compatibility)
   publisher_role_names = [aws_iam_role.ecs_task_role.name]
   consumer_role_names  = [aws_iam_role.ecs_task_role.name]
 
@@ -53,3 +57,32 @@ resource "aws_secretsmanager_secret_version" "worker_secret" {
   })
 }
 
+# ===========================================
+# SES (Simple Email Service) Configuration
+# ===========================================
+
+# SES Email Identity (domain or email address)
+resource "aws_ses_email_identity" "sender" {
+  email = local.ses_sender_email
+}
+
+
+# IAM Policy for allowing ECS Task Role to send emails via SES
+resource "aws_iam_role_policy" "ses_send_email" {
+  name = "${var.project_name}-${var.environment}-ses-send-email"
+  role = aws_iam_role.ecs_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ses:SendEmail",
+          "ses:SendRawEmail"
+        ]
+        Resource = aws_ses_email_identity.sender.arn
+      }
+    ]
+  })
+}

@@ -31,6 +31,7 @@ provider "aws" {
       logs                   = var.localstack_endpoint
       sqs                    = var.localstack_endpoint
       secretsmanager         = var.localstack_endpoint
+      ses                    = var.localstack_endpoint
       applicationautoscaling = var.localstack_endpoint
     }
   }

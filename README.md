@@ -3,7 +3,6 @@
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
-- [Services](#services)
 - [Prerequisites](#prerequisites)
 - [Important Points](#important-points)
 - [Walkthrough 1: IaC Provisioning for the Platform](#walkthrough-1-iac-provisioning-for-the-platform)
@@ -15,6 +14,21 @@
 ## Architecture Overview
 
 ![Architecture Diagram](images/overall-architecture.png)
+
+### Services
+
+#### sampleapi
+HTTP API service that:
+- Exposes REST endpoints (`/health`, `/api/*`)
+- Publishes messages to SQS queue
+- Exposes Prometheus metrics on `/metrics`
+
+#### sampleworker
+Background worker service that:
+- Consumes messages from SQS queue
+- Processes tasks asynchronously
+- Includes distributed tracing with OpenTelemetry
+- Exposes Prometheus metrics
 
 ### Project Structure
 
@@ -56,23 +70,6 @@ sample-monorepo/
 
 ---
 
-## Services
-
-### sampleapi
-HTTP API service that:
-- Exposes REST endpoints (`/health`, `/api/*`)
-- Publishes messages to SQS queue
-- Exposes Prometheus metrics on `/metrics`
-
-### sampleworker
-Background worker service that:
-- Consumes messages from SQS queue
-- Processes tasks asynchronously
-- Includes distributed tracing with OpenTelemetry
-- Exposes Prometheus metrics
-
----
-
 ## Prerequisites
 
 - Go 1.23+
@@ -82,19 +79,19 @@ Background worker service that:
 - AWS CLI v2
 - LocalStack (Pro license required for ECS features in CI/CD)
 
----
-
 ### **Important points**:
 - The implementation is not running on a real cloud services, so there will be some **limitation**:
   - Using localstack to demo and validate `terraform plan` only, the applied part already done in local, so the github action PR only support showing diff from `plan`, `terraform apply` steps only a mock behaviors
   - Application release requiring applying new task-definitions to ECS services which running in localstack, to update a new task on ECS in localstack via github action, `Docker in Docker` currently not supporting, so applying task definition is only mocking ref
   - Monitoring stacks requiring spin up from mounted volume services stack (with loki, prometheus and jaeger), localstack has some limitation and requiring complex setup, so this part will be set up and run locally
 
+---
+
 ## Walkthrough 1: IaC provisioning for the Platform
 
 ### User Story
 
-> *"As a Backend Engineer, I only need to provide my code and define basic infrastructure configuration (CPU, memory, replicas, autoscaling rules, ALB paths). The platform should handle the rest."*
+> *"As a Backend Engineer, I only need to provide my code and define basic infrastructure configuration (CPU, memory, replicas, autoscaling rules, ALB paths). The Devops Team should handle the rest."*
 
 > *"As a Backend Engineer, I want CI/CD to automatically provision/update infrastructure when I change configurations."*
 
@@ -153,7 +150,7 @@ The infrastructure is organized into two categories:
 
 ```
 terraform/aws/
-├── shared-infrastructure.tf    # Platform team manages (SQS, Secrets)
+├── shared-infrastructure.tf    # DevOps team manages (SQS, Secrets)
 ├── service-sampleapi.tf        # Developer defines (per-service)
 ├── service-sampleworker.tf     # Developer defines (per-service)
 ├── ...
@@ -670,4 +667,5 @@ sampleworker-fail-simulate:
   - For the idea, these Platform metris can gather all of necessary resources from AWS like:
     - ECS Cluster basic metrics with cpu utilization, memory utilization usage for each service running on clusters
     - ALB: Application load balancer with 5xx errors in the platform
+    - SQS messages number
     - etc

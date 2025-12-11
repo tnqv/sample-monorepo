@@ -130,3 +130,16 @@ output "sqs_dlq_arn" {
   value       = module.tasks_queue.dlq_arn
 }
 
+# ===========================================
+# SES (Simple Email Service)
+# ===========================================
+
+output "ses_sender_email" {
+  description = "SES sender email address"
+  value       = aws_ses_email_identity.sender.email
+}
+
+output "ses_sender_arn" {
+  description = "SES sender email identity ARN"
+  value       = aws_ses_email_identity.sender.arn
+}

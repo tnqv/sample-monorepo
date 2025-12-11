@@ -54,3 +54,13 @@ variable "worker_secret_key" {
   default     = "change-me-in-production"
   sensitive   = true
 }
+
+# ===========================================
+# SES Configuration
+# ===========================================
+
+variable "ses_domain" {
+  description = "Domain to use as sender for SES"
+  type        = string
+  default     = "example.com"
+}
