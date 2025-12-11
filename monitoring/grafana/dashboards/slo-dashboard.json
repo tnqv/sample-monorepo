@@ -11,7 +11,7 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "panels": [],
-      "title": "🎯 SLO Overview",
+      "title": "🌐 Service-Level: API Service SLO",
       "type": "row"
     },
     {
@@ -381,11 +381,12 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
       "id": 11,
       "panels": [],
-      "title": "🔧 Worker SLO",
+      "title": "Service-Level: Email Worker SLO",
       "type": "row"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Total number of emails successfully sent since worker started",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -403,7 +404,7 @@
       "gridPos": { "h": 5, "w": 6, "x": 0, "y": 24 },
       "id": 12,
       "options": {
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
@@ -414,16 +415,17 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "worker_tasks_processed_total",
-          "legendFormat": "Total Tasks",
+          "expr": "sum(worker_emails_sent_total{job=~\"sampleworker.*\"})",
+          "legendFormat": "Total Emails Sent",
           "refId": "A"
         }
       ],
-      "title": "✅ Total Tasks Processed",
+      "title": "✅ Total Emails Sent",
       "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Total number of emails that failed to send since worker started",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -431,19 +433,19 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.1 },
-              { "color": "red", "value": 0.5 }
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": null }
             ]
           },
-          "unit": "s"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": { "h": 5, "w": 6, "x": 6, "y": 24 },
-      "id": 13,
+      "id": 21,
       "options": {
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
@@ -454,16 +456,56 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(worker_task_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p95 Duration",
+          "expr": "sum(worker_emails_failed_total{job=~\"sampleworker.*\"})",
+          "legendFormat": "Total Failed Emails",
           "refId": "A"
         }
       ],
-      "title": "⏱️ Task Duration (p95)",
+      "title": "❌ Total Failed Emails",
       "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Total number of email attempts (successful + failed)",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 24 },
+      "id": 22,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(worker_emails_sent_total{job=~\"sampleworker.*\"} or vector(0)) + sum(worker_emails_failed_total{job=~\"sampleworker.*\"} or vector(0))",
+          "legendFormat": "Total Attempts",
+          "refId": "A"
+        }
+      ],
+      "title": "📊 Total Email Attempts",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "How many emails are sent per second",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -495,7 +537,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 24 },
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 29 },
       "id": 14,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
@@ -504,12 +546,406 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "rate(worker_tasks_processed_total[1m])",
-          "legendFormat": "Tasks/sec",
+          "expr": "sum(rate(worker_emails_sent_total{job=~\"sampleworker.*\"}[1m]))",
+          "legendFormat": "Emails/sec",
           "refId": "A"
         }
       ],
-      "title": "📈 Task Throughput",
+      "title": "Email Throughput (emails per second)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Average time to send 1 email",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.3 },
+              { "color": "orange", "value": 0.5 },
+              { "color": "red", "value": 1.0 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 29 },
+      "id": 13,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(worker_email_duration_seconds_bucket{job=~\"sampleworker.*\"}[5m])) by (le))",
+          "legendFormat": "p95 Duration",
+          "refId": "A"
+        }
+      ],
+      "title": "Email Duration (p95) - Time to send 1 email",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Current success rate percentage (successful / total attempts)",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 95 },
+              { "color": "yellow", "value": 99 },
+              { "color": "green", "value": 99.9 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 29 },
+      "id": 23,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "100 * (sum(worker_emails_sent_total{job=~\"sampleworker.*\"}) or vector(0)) / ((sum(worker_emails_sent_total{job=~\"sampleworker.*\"}) or vector(0)) + (sum(worker_emails_failed_total{job=~\"sampleworker.*\"}) or vector(0)) + 0.001)",
+          "legendFormat": "Success Rate",
+          "refId": "A"
+        }
+      ],
+      "title": "📈 Success Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 95 },
+              { "color": "yellow", "value": 99 },
+              { "color": "green", "value": 99.9 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 29 },
+      "id": 17,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "100 * (sum(rate(worker_emails_sent_total{job=~\"sampleworker.*\"}[5m])) or vector(0)) / ((sum(rate(worker_emails_sent_total{job=~\"sampleworker.*\"}[5m])) or vector(0)) + (sum(rate(worker_emails_failed_total{job=~\"sampleworker.*\"}[5m])) or vector(0)) + 0.001)",
+          "legendFormat": "Availability",
+          "refId": "A"
+        }
+      ],
+      "title": "📊 Email Availability SLO (Target: 99.9%)",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 29 },
+      "id": 18,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "100 * (sum(rate(worker_emails_failed_total{job=~\"sampleworker.*\"}[5m])) or vector(0)) / ((sum(rate(worker_emails_sent_total{job=~\"sampleworker.*\"}[5m])) or vector(0)) + (sum(rate(worker_emails_failed_total{job=~\"sampleworker.*\"}[5m])) or vector(0)) + 0.001)",
+          "legendFormat": "Error Rate",
+          "refId": "A"
+        }
+      ],
+      "title": "🔴 Email Error Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Error budget remaining for email sending. Target SLO: 99.9% availability = 0.1% error budget",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 25 },
+              { "color": "yellow", "value": 50 },
+              { "color": "green", "value": 75 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 29 },
+      "id": 19,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "100 * (1 - ((sum(rate(worker_emails_failed_total{job=~\"sampleworker.*\"}[1h])) or vector(0)) / (0.001 * ((sum(rate(worker_emails_sent_total{job=~\"sampleworker.*\"}[1h])) or vector(0)) + (sum(rate(worker_emails_failed_total{job=~\"sampleworker.*\"}[1h])) or vector(0))) + 0.001)))",
+          "legendFormat": "Error Budget Remaining",
+          "refId": "A"
+        }
+      ],
+      "title": "Email Error Budget Remaining (99.9% SLO)",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 99.9 }
+            ]
+          },
+          "unit": "percent",
+          "max": 100,
+          "min": 95
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 35 },
+      "id": 20,
+      "options": {
+        "legend": { "calcs": ["mean", "min"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "100 * (sum(rate(worker_emails_sent_total{job=~\"sampleworker.*\"}[5m])) or vector(0)) / ((sum(rate(worker_emails_sent_total{job=~\"sampleworker.*\"}[5m])) or vector(0)) + (sum(rate(worker_emails_failed_total{job=~\"sampleworker.*\"}[5m])) or vector(0)) + 0.001)",
+          "legendFormat": "Email Availability %",
+          "refId": "A"
+        }
+      ],
+      "title": "📉 Email Availability Over Time",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 41 },
+      "id": 15,
+      "panels": [],
+      "title": "Message-Level: Individual Email Processing Tracking",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "How long it takes to send 1 email - showing p50 (median), p95, and p99 percentiles",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Duration (seconds)",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.3 },
+              { "color": "orange", "value": 0.5 },
+              { "color": "red", "value": 1.0 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 42 },
+      "id": 16,
+      "options": {
+        "legend": { "calcs": ["mean", "max", "p95", "p99"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum(rate(worker_email_duration_seconds_bucket{job=~\"sampleworker.*\"}[5m])) by (le))",
+          "legendFormat": "p50 (median)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(worker_email_duration_seconds_bucket{job=~\"sampleworker.*\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum(rate(worker_email_duration_seconds_bucket{job=~\"sampleworker.*\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "title": "Email Duration: Time to send 1 email",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "How many emails are sent per minute - tracks throughput over time",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 42 },
+      "id": 20,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(worker_emails_sent_total{job=~\"sampleworker.*\"}[1m])) * 60",
+          "legendFormat": "Emails per minute",
+          "refId": "A"
+        }
+      ],
+      "title": "Email Throughput: Emails sent per minute",
       "type": "timeseries"
     }
   ],
