@@ -10,8 +10,7 @@ A production-ready monorepo demonstrating microservices architecture with ECS Fa
 - [Important Points](#important-points)
 - [Scenario 1: IaC Provisioning for the Platform](#scenario-1-iac-provisioning-for-the-platform)
 - [Scenario 2: Release New Version Application](#scenario-2-release-new-version-application)
-- [Scenario 3: Monitoring (SLO and Distributed Tracing)](#scenario-3-monitoring-slo-definition-and-distributed-tracing-stacks)
-- [License](#license)
+- [Scenario 3: Monitoring (SLI/SLO and Distributed Tracing)](#scenario-3-monitoring-slo-definition-and-distributed-tracing-stacks)
 
 ---
 
@@ -107,6 +106,7 @@ Background worker service that:
 
 ![terraform-flow](images/terraform-flow-architecture.png)
 
+
 ### Terraform Modules
 
 | Module | Description | Used In | Key Features |
@@ -117,13 +117,24 @@ Background worker service that:
 ### Infrastructure Files Overview
 
 | File | Purpose | Responsible Owner |
-|------|---------|-------|
+|------|---------|-------------------|
+| `main.tf` | Provider configuration, Terraform settings | Devops Team |
+| `backend.tf` | Remote state backend configuration (S3/DynamoDB) | Devops Team |
+| `variables.tf` | Variable definitions | Devops Team |
+| `data.tf` | Data sources (availability zones, etc.) | Devops Team |
 | `vpc.tf` | VPC, subnets, NAT gateway | Devops Team |
+| `sg.tf` | Security groups (ALB, ECS) | Devops Team |
 | `alb.tf` | Application Load Balancer | Devops Team |
 | `ecs.tf` | ECS Cluster, IAM roles | Devops Team |
 | `shared-infrastructure.tf` | SQS queues, Secrets Manager | Devops Team |
+| `outputs.tf` | Output values (VPC IDs, ALB DNS, etc.) | Devops Team |
 | `service-sampleapi.tf` | API service definition | Backend Engineer |
 | `service-sampleworker.tf` | Worker service definition | Backend Engineer |
+| `environments/*.tfvars` | Environment-specific variable overrides | Devops Team |
+
+
+- DevOps Team will prepare and responsible for all the Platform
+- Backend Engineer only need to focus on basic infrastructure configuration
 
 ### Workspaces
 
@@ -316,7 +327,10 @@ PR Merged → Manual workflow_dispatch
 ```
 
 ### Pull Request Example:
-- Create a new service `terraform plan`: https://github.com/tnqv/sample-monorepo/pull/11
+- Create a new service PR: https://github.com/tnqv/sample-monorepo/pull/11
+  - `terraform plan` results output on comment: 
+    - staging: https://github.com/tnqv/sample-monorepo/pull/11#issuecomment-3638338510
+    - prod: https://github.com/tnqv/sample-monorepo/pull/11#issuecomment-3638338361
 
 ---
 
@@ -326,7 +340,7 @@ PR Merged → Manual workflow_dispatch
 
 > *"As a Backend Engineer, when I merge code to the release branch, CI/CD should automatically deploy my application to staging, and after approval, to production."*
 
-![terraform-flow](./images/ci-cd-release-application.png)
+![release-application-flow](images/ci-cd-release-application.png)
 
 ### CI/CD Pipelines
 
@@ -398,7 +412,7 @@ Merge PR to 'main' → Push 'main' to 'release' branch
 │  │     └── sampleapi-abc123-20241211120000         │  │
 │  │  2. Build Docker image from Dockerfile          │  │
 │  │  3. Tag image for ECR                           │  │
-│  │  4. Push to LocalStack ECR                      │  │
+│  │  4. Push to LocalStack ECR (mock)               │  │
 │  └────────────────────┬────────────────────────────┘  │
 │                       │                               │
 │                       ▼                               │
@@ -407,7 +421,7 @@ Merge PR to 'main' → Push 'main' to 'release' branch
 │  ├─────────────────────────────────────────────────┤  │
 │  │  1. Render task definition (Jsonnet)            │  │
 │  │  2. Register task definition                    │  │
-│  │  3. Update ECS service                          │  │
+│  │  3. Update ECS service (mock)                   │  │
 │  └────────────────────┬────────────────────────────┘  │
 │                       │                               │
 │                       ▼                               │
@@ -459,11 +473,20 @@ aws ecs update-service \
 
 
 ### Release pipeline examples:
-- Github Action: https://github.com/tnqv/sample-monorepo/actions/runs/20109325967
+
+- Github Action Deployment overview: https://github.com/tnqv/sample-monorepo/actions/runs/20132058764
+  - Step 1:
+    - Add feature PR: https://github.com/tnqv/sample-monorepo/pull/15
+  - Step 2:
+    - Create a PR to release: https://github.com/tnqv/sample-monorepo/pull/16
+    - Build and Push image to ECR: https://github.com/tnqv/sample-monorepo/actions/runs/20132058764/job/57775707372
+  - Step 3 & 4: Deploy
+    - Deploy to staging: https://github.com/tnqv/sample-monorepo/actions/runs/20132058764/job/57775926636
+    - Deploy to production: https://github.com/tnqv/sample-monorepo/actions/runs/20132058764/job/57776082617
 
 ---
 
-## Scenario 3: Monitoring (SLO Definition and Distributed Tracing Stacks)
+## Scenario 3: Monitoring (SLI/SLO and Distributed Tracing)
 
 ### User Story
 
