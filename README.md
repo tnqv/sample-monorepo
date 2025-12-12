@@ -4,10 +4,9 @@
 
 - [Architecture Overview](#architecture-overview)
 - [Prerequisites](#prerequisites)
-- [Important Points](#important-points)
-- [Walkthrough 1: IaC Provisioning for the Platform](#walkthrough-1-iac-provisioning-for-the-platform)
-- [Walkthrough 2: Release New Version Application](#walkthrough-2-release-new-version-application)
-- [Walkthrough 3: Monitoring (SLI/SLO and Distributed Tracing)](#walkthrough-3-monitoring-slo-definition-and-distributed-tracing-stacks)
+- [Walkthrough 1: IaC provisioning for the Platform (with Github Action)](#walkthrough-1-iac-provisioning-for-the-platform-with-github-action)
+- [Walkthrough 2: Release New Version Application (with Github Action)](#walkthrough-2-release-new-version-application-with-github-action)
+- [Walkthrough 3: Monitoring (SLI/SLO and Distributed Tracing) (Local Setup required)](#walkthrough-3-monitoring-slislo-and-distributed-tracing-local-setup-required)
 
 ---
 
@@ -97,11 +96,12 @@ sample-monorepo/
 - The implementation is not running on a real cloud services, so there will be some **limitation**:
   - Using localstack to demo and validate `terraform plan` only, the applied part already done in local, so the github action PR only support showing diff from `plan`, `terraform apply` steps only a mock behaviors
   - Application release requiring applying new task-definitions to ECS services which running in localstack, to update a new task on ECS in localstack via github action, `Docker in Docker` currently not supporting, so applying task definition is only mocking ref
+  - For the best practice, ECS Fargate logging and monitoring should follow up with Cloudwatch logs and combining tracing by using Datadog, but these approaches requiring additional costs, so the idea to specify SLO metrics by setting up a separate monitoring system locally.
   - Monitoring stacks requiring spin up from mounted volume services stack (with loki, prometheus and jaeger), localstack has some limitation and requiring complex setup, so this part will be set up and run locally
 
 ---
 
-## Walkthrough 1: IaC provisioning for the Platform
+## Walkthrough 1: IaC provisioning for the Platform (with Github Action)
 
 ### User Story
 
@@ -351,7 +351,7 @@ PR Merged → Manual workflow_dispatch
 
 ---
 
-## Walkthrough 2: Release New Version Application
+## Walkthrough 2: Release New Version Application (with Github Action)
 
 ### User Story
 
@@ -505,7 +505,7 @@ aws ecs update-service \
 
 ---
 
-## Walkthrough 3: Monitoring (SLI/SLO and Distributed Tracing)
+## Walkthrough 3: Monitoring (SLI/SLO and Distributed Tracing) (Local Setup required)
 
 ### User Story
 
@@ -529,7 +529,7 @@ Start all services including the monitoring stack:
 docker-compose -f docker-compose.local.yml up -d
 ```
 
-Wait for all services to be healthy (check with `docker-compose ps`).
+Wait for all services to be healthy (check with `docker ps`).
 
 ![monitor architecture diagram](images/local-monitoring-architect.png)
 
@@ -540,7 +540,7 @@ Wait for all services to be healthy (check with `docker-compose ps`).
 | Prometheus     | http://localhost:9090      | N/A |
 | Grafana        | http://localhost:3000      | admin/admin |
 | Jaeger UI      | http://localhost:16686     | N/A |
-| Loki           | http://localhost:3100      | N/A |
+| Loki API        | http://localhost:3100      | N/A |
 | sampleapi       | http://localhost:8080      | N/A |
 | sampleworker   | N/A                        | N/A |
 | sampleworker_2 (for fail scenarios) | N/A   | N/A |

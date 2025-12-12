@@ -43,24 +43,25 @@ services:
       - jaeger
     restart: unless-stopped
 
-  sampleworker-fail-simulate:
-    build:
-      context: .
-      dockerfile: cmd/sampleworker/Dockerfile
-    container_name: sampleworker-fail-simulate
-    environment:
-      - FAIL_SIMULATE_ENABLED=true
-      - WORKER_INTERVAL=5s
-      - METRICS_PORT=9091
-      - SECRET_KEY=local-dev-secret
-      - LOG_LEVEL=debug
-      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
-      - OTEL_SERVICE_NAME=sampleworker_2
-    networks:
-      - app-network
-    depends_on:
-      - jaeger
-    restart: unless-stopped
+# Uncomment this to simulate SLO violation by sending email unsucessfully 
+  # sampleworker-fail-simulate:
+  #   build:
+  #     context: .
+  #     dockerfile: cmd/sampleworker/Dockerfile
+  #   container_name: sampleworker-fail-simulate
+  #   environment:
+  #     - FAIL_SIMULATE_ENABLED=true
+  #     - WORKER_INTERVAL=5s
+  #     - METRICS_PORT=9091
+  #     - SECRET_KEY=local-dev-secret
+  #     - LOG_LEVEL=debug
+  #     - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
+  #     - OTEL_SERVICE_NAME=sampleworker_2
+  #   networks:
+  #     - app-network
+  #   depends_on:
+  #     - jaeger
+  #   restart: unless-stopped
 
   # ===================
   # Monitoring Stack
@@ -155,5 +156,4 @@ networks:
 volumes:
   prometheus-data:
   grafana-data:
-  loki-data:
 
